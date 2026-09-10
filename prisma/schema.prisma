@@ -1,0 +1,251 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  USER
+  VIEWER
+}
+
+enum TenderStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  AWARDED
+  REJECTED
+  CANCELLED
+  ON_HOLD
+}
+
+enum Region {
+  ABU_DHABI
+  DUBAI
+  OTHER
+}
+
+enum SourceKind {
+  PERSON
+  EMAIL
+  WHATSAPP
+  CONSULTANT
+  WALK_IN
+  OTHER
+}
+
+enum RejectReason {
+  PRICE_TOO_HIGH
+  CLIENT_DELAY
+  AWARDED_TO_COMPETITOR
+  SCOPE_MISMATCH
+  NO_RESPONSE
+  CLIENT_CANCELLED
+  OTHER
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String
+  passwordHash  String
+  role          Role      @default(USER)
+  phone         String?
+  isActive      Boolean   @default(true)
+  region        Region    @default(ABU_DHABI)
+  createdAt     DateTime  @default(now())
+  deletedAt     DateTime?
+
+  ownedTenders  Tender[]       @relation("TenderOwner")
+  sources       Source[]
+  followUps     FollowUp[]
+  comments      Comment[]
+  activityLogs  ActivityLog[]
+  notifications Notification[]
+}
+
+model Source {
+  id        String        @id @default(cuid())
+  name      String        @unique // canonical, e.g. "Engr Hassan"
+  kind      SourceKind    @default(PERSON)
+  userId    String? // link to the salesperson if PERSON
+  user      User?         @relation(fields: [userId], references: [id])
+  aliases   SourceAlias[]
+  isActive  Boolean       @default(true)
+  tenders   Tender[]
+}
+
+// Critical: the legacy sheet spells one person many ways. Import matches on alias.
+model SourceAlias {
+  id       String @id @default(cuid())
+  raw      String @unique // "Eng.Hassan", "Sir Engr Hassan", "Eng Hassan/FAB"
+  sourceId String
+  source   Source @relation(fields: [sourceId], references: [id])
+}
+
+model Consultant {
+  id            String   @id @default(cuid())
+  companyName   String   @unique // "Al Ajmi Engineering", "Glory Consultant"
+  engineerName  String? // "Engr Abdullah"
+  contactNumber String?
+  email         String?
+  region        Region   @default(ABU_DHABI)
+  notes         String?
+  tenders       Tender[]
+}
+
+model Client {
+  id            String   @id @default(cuid())
+  name          String // "Mr. Saleh Salem Ali Al Minhali"
+  contactNumber String?
+  email         String?
+  tenders       Tender[]
+
+  @@index([name])
+}
+
+model Tender {
+  id              String       @id @default(cuid())
+  tenderNumber    Int          @unique // 1000, 1200… continues the Excel sequence
+  serialNo        Int? // legacy S/N from the sheet
+  fiscalYear      Int // sheet the row came from / entry year
+  revision        String?      @default("Initial")
+
+  clientId        String?
+  client          Client?      @relation(fields: [clientId], references: [id])
+  clientNameRaw   String // always keep the raw text as typed
+
+  location        String // "Madinat Al Riyad", "Zayed City"
+  region          Region       @default(ABU_DHABI)
+
+  status          TenderStatus @default(DRAFT)
+  statusUpdatedAt DateTime     @default(now())
+
+  tenderAmount    BigInt? // fils
+  targetPrice     BigInt? // internal target, fils
+  totalAreaSqm    Float?
+  // pricePerSqm is DERIVED: tenderAmount / totalAreaSqm. Never store it.
+
+  projectDetails  String? // "Villa Block, Service Block & Boundary Wall"
+  remarks         String?
+  commissionNote  String? // legacy free text e.g. "4%+2%"
+
+  sourceId        String?
+  source          Source?      @relation(fields: [sourceId], references: [id])
+  sourceRaw       String? // original messy text, preserved
+
+  ownerId         String // who follows this up
+  owner           User         @relation("TenderOwner", fields: [ownerId], references: [id])
+
+  consultantId    String?
+  consultant      Consultant?  @relation(fields: [consultantId], references: [id])
+
+  receivedAt      DateTime     @default(now())
+  submittedAt     DateTime?
+  targetDate      DateTime?
+  nextFollowUpAt  DateTime? // auto-set to submittedAt + 30 days
+
+  rejectReason    RejectReason?
+  rejectNote      String?
+
+  award           Award?
+  followUps       FollowUp[]
+  comments        Comment[]
+  attachments     Attachment[]
+  activityLogs    ActivityLog[]
+
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  deletedAt       DateTime?
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([fiscalYear])
+  @@index([nextFollowUpAt])
+}
+
+model Award {
+  id             String    @id @default(cuid())
+  tenderId       String    @unique
+  tender         Tender    @relation(fields: [tenderId], references: [id])
+  projectNumber  Int       @unique // PJ/N — assigned only on award
+  contractAmount BigInt // fils; may differ from tenderAmount
+  contractDate   DateTime?
+  targetMonth    String?
+  handoverNotes  String?
+  createdAt      DateTime  @default(now())
+}
+
+model FollowUp {
+  id           String    @id @default(cuid())
+  tenderId     String
+  tender       Tender    @relation(fields: [tenderId], references: [id])
+  userId       String
+  user         User      @relation(fields: [userId], references: [id])
+  contactedAt  DateTime  @default(now())
+  method       String // WhatsApp | Call | Email | Visit
+  outcome      String
+  nextActionAt DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  tenderId  String
+  tender    Tender    @relation(fields: [tenderId], references: [id])
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  body      String
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  tenderId     String
+  tender       Tender   @relation(fields: [tenderId], references: [id])
+  filename     String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String
+  uploadedById String
+  createdAt    DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  tenderId  String?
+  tender    Tender?  @relation(fields: [tenderId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String // CREATED | STATUS_CHANGED | FIELD_UPDATED | …
+  field     String?
+  oldValue  String?
+  newValue  String?
+  createdAt DateTime @default(now())
+
+  @@index([tenderId, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  type      String // FOLLOWUP_DUE | STATUS_CHANGED | ASSIGNED | MENTIONED | AWARDED
+  title     String
+  body      String
+  linkUrl   String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+}

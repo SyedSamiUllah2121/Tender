@@ -1,0 +1,17 @@
+node_modules/
+coverage/
+.DS_Store
+*.log
+
+# Next.js
+.next/
+out/
+build/
+next-env.d.ts
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Env
+.env*
+!.env.example

@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Inspire Corporate Brand Colors */
+  --brand-primary: #8b151b;
+  --brand-hover: #731217;
+  --brand-active: #5e0d12;
+  --brand-subtle: #fdf2f2;
+  --brand-border: #fecaca;
+  --brand-ring: rgba(139, 21, 27, 0.2);
+
+  /* Sophisticated Modern Slate Neutrals */
+  --bg-canvas: #f8fafc;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+  --text-900: #0f172a;
+  --text-700: #334155;
+  --text-500: #64748b;
+  --text-400: #94a3b8;
+
+  /* Status Colors */
+  --green-fg: #15803d;
+  --green-bg: #f0fdf4;
+  --green-border: #bbf7d0;
+
+  --red-fg: #b91c1c;
+  --red-bg: #fef2f2;
+  --red-border: #fecaca;
+  --red-50: #fdf2f2;
+  --red-100: #fee2e2;
+  --red-200: #fecaca;
+  --red-600: #a51d24;
+  --red-700: #8b151b;
+  --red-800: #731217;
+  --red-900: #5e0d12;
+  --red-950: #450a0a;
+
+  --blue-fg: #1d4ed8;
+  --blue-bg: #eff6ff;
+  --blue-border: #bfdbfe;
+
+  --amber-fg: #b45309;
+  --amber-bg: #fffbeb;
+  --amber-border: #fde68a;
+
+  --purple-fg: #7e22ce;
+  --purple-bg: #faf5ff;
+  --purple-border: #e9d5ff;
+
+  --teal-fg: #0f766e;
+  --teal-bg: #f0fdfa;
+  --teal-border: #99f6e4;
+
+  --grey-fg: #475569;
+  --grey-bg: #f8fafc;
+  --grey-border: #e2e8f0;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-900);
+  font-family: var(--font-sans);
+  font-size: 13.5px;
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular figures for financial numbers and codes */
+.font-mono {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum" 1;
+}
+
+/* Subtle, minimalist scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Print Stylesheet */
+@media print {
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  .no-print, header, nav, aside, .action-bar, button {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  .card, table {
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
+}

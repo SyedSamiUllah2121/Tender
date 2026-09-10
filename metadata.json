@@ -1,0 +1,6 @@
+{
+  "name": "Inspire Tender & Project Management System",
+  "description": "Tender and project management system for Inspire Builders General Contracting in Abu Dhabi and Dubai, UAE.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
