@@ -51,7 +51,7 @@ src/
   context/                  AuthContext (current user + data version)
   lib/                      repositories, permissions, money, normalize, notify
   types/                    shared domain types
-prisma/                     schema (not yet wired to the app)
+public/                     static assets served at /
 ```
 
 ## Data layer
@@ -63,6 +63,7 @@ state only exists in the browser, `src/app/providers.tsx` mounts the app on the
 client and shows a boot screen during server rendering — this keeps server and
 client markup consistent.
 
-`prisma/schema.prisma` describes the intended relational model but is not
-connected yet; swapping the repository for Prisma-backed route handlers or
-server actions is the natural next step.
+There is no server database: the browser *is* the store. Each browser keeps its
+own independent copy of the data, so edits persist across reloads on that
+machine but are never shared between browsers, devices or private windows.
+Clearing site data resets the app to its seed state.
