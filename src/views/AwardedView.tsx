@@ -89,22 +89,22 @@ export const AwardedView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            <h1 className="text-base font-semibold text-slate-900">
               Awarded Contracts & Project Register
             </h1>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[11px] font-semibold">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 text-[11px] font-semibold">
               {filtered.length} Projects
             </span>
           </div>
           <p className="text-xs text-slate-500">
-            Official project numbers (PJ/N), executed contracts, and construction handover logs
+            Project numbers, contract values and handover notes.
           </p>
         </div>
 
         <button
           type="button"
           onClick={handleExport}
-          className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-xs cursor-pointer"
+          className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-gray-700 bg-white border border-slate-300 hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer"
         >
           <Download className="w-3.5 h-3.5 text-emerald-700" />
           <span>Export Awarded Sheet</span>
@@ -113,31 +113,31 @@ export const AwardedView: React.FC = () => {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white p-4 rounded-xl border border-[var(--border)] shadow-xs border-t-3 border-t-emerald-600">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
+        <div className="bg-white p-4 rounded-md border border-[var(--border)] border-t-3 border-t-emerald-600">
+          <div className="text-[11px] font-medium text-emerald-700">
             Total Awarded Value
           </div>
-          <div className="text-2xl font-black text-emerald-950 mt-1 font-mono">
+          <div className="text-2xl font-semibold text-emerald-950 mt-1 font-mono">
             {formatAED(totalContractVal)}
           </div>
           <div className="text-[11px] text-gray-500 mt-1">Across all signed contracts</div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-[var(--border)] shadow-xs border-t-3 border-t-emerald-600">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
+        <div className="bg-white p-4 rounded-md border border-[var(--border)] border-t-3 border-t-emerald-600">
+          <div className="text-[11px] font-medium text-gray-500">
             Average Project Value
           </div>
-          <div className="text-2xl font-black text-gray-900 mt-1 font-mono">
+          <div className="text-2xl font-semibold text-gray-900 mt-1 font-mono">
             {formatAED(filtered.length > 0 ? totalContractVal / BigInt(filtered.length) : 0n)}
           </div>
           <div className="text-[11px] text-gray-500 mt-1">Per awarded villa/structure</div>
         </div>
 
-        <div className="bg-white p-4 rounded-xl border border-[var(--border)] shadow-xs border-t-3 border-t-amber-500">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-amber-700">
+        <div className="bg-white p-4 rounded-md border border-[var(--border)] border-t-3 border-t-amber-500">
+          <div className="text-[11px] font-medium text-amber-700">
             Compliance Checklist
           </div>
-          <div className="text-2xl font-black text-amber-950 mt-1">
+          <div className="text-2xl font-semibold text-amber-950 mt-1">
             {missingContractDateCount === 0 ? (
               <span className="text-emerald-700 text-base font-bold flex items-center gap-1">
                 <CheckCircle2 className="w-5 h-5" /> All Dates Recorded
@@ -153,7 +153,7 @@ export const AwardedView: React.FC = () => {
       </div>
 
       {/* Filter Row */}
-      <div className="bg-white p-3 rounded-xl border border-[var(--border)] shadow-xs flex items-center gap-3">
+      <div className="bg-white p-3 rounded-md border border-[var(--border)] flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -161,14 +161,14 @@ export const AwardedView: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter awarded projects by PJ/N, client name, or location..."
-            className="w-full pl-9 pr-4 py-1.5 text-xs rounded-lg border border-gray-300 outline-none"
+            className="w-full pl-9 pr-4 py-1.5 text-xs rounded-md border border-slate-400 outline-none"
           />
         </div>
 
         <select
           value={yearFilter}
           onChange={(e) => setYearFilter(e.target.value)}
-          className="text-xs p-1.5 rounded-lg border border-gray-300 bg-white font-medium"
+          className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium"
         >
           <option value="ALL">All Fiscal Years</option>
           <option value="2026">2026</option>
@@ -178,11 +178,11 @@ export const AwardedView: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
+      <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse" style={{ fontSize: '12.5px' }}>
             <thead>
-              <tr className="border-b border-[var(--border)] bg-gray-50/80 uppercase font-bold text-[11px] text-[var(--text-500)] tracking-wider">
+              <tr className="border-b border-[var(--border)] bg-gray-50 uppercase font-bold text-[11px] text-[var(--text-500)] tracking-wider">
                 <th className="p-2.5">Project No</th>
                 <th className="p-2.5">Tender #</th>
                 <th className="p-2.5">Client Name</th>
@@ -196,7 +196,7 @@ export const AwardedView: React.FC = () => {
                 <th className="p-2.5">Lead Owner</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-200">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="p-10 text-center text-gray-400 text-xs">
@@ -212,10 +212,10 @@ export const AwardedView: React.FC = () => {
                     <tr
                       key={t.id}
                       onClick={() => router.push(`/tenders/${t.id}`)}
-                      className="hover:bg-rose-50/50 transition-colors cursor-pointer"
+                      className="hover:bg-rose-50 transition-colors cursor-pointer"
                     >
                       <td className="p-2.5 whitespace-nowrap">
-                        <span className="font-mono font-black text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
+                        <span className="font-mono font-semibold text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">
                           PJ/{t.award?.projectNumber || '—'}
                         </span>
                       </td>
@@ -228,7 +228,7 @@ export const AwardedView: React.FC = () => {
 
                       <td className="p-2.5 text-gray-600 whitespace-nowrap">{t.location}</td>
 
-                      <td className="p-2.5 text-right font-mono font-black text-emerald-900 whitespace-nowrap">
+                      <td className="p-2.5 text-right font-mono font-semibold text-emerald-900 whitespace-nowrap">
                         {formatAED(t.award?.contractAmount || t.tenderAmount)}
                       </td>
 

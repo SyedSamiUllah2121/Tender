@@ -27,6 +27,8 @@ import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { formatCompact, formatAED, fromFils } from '../lib/money';
 import { pricePerSqm } from '../lib/derive';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { hasFullAccess } from '../lib/permissions';
+import { ACTIVE_STATUSES, FOLLOW_UP_WINDOW_MONTHS, isPastFollowUpWindow } from '../lib/followUpPolicy';
 
 export const DashboardView: React.FC = () => {
   const router = useRouter();
@@ -42,7 +44,7 @@ export const DashboardView: React.FC = () => {
 
   // Apply "My tenders only" toggle if admin/manager
   const tenders = useMemo(() => {
-    if (currentUser.role === 'USER') return baseTenders;
+    if (!hasFullAccess(currentUser)) return baseTenders;
     if (myTendersOnly) {
       return baseTenders.filter(
         (t) => t.ownerId === currentUser.id || t.source?.userId === currentUser.id
@@ -62,6 +64,12 @@ export const DashboardView: React.FC = () => {
         new Date(t.nextFollowUpAt) < now
     );
   }, [tenders, now]);
+
+  // Past the mandatory 2-month window with no clear status recorded.
+  const pastFollowUpWindow = useMemo(
+    () => tenders.filter((t) => isPastFollowUpWindow(t, now)),
+    [tenders, now]
+  );
 
   const noActivity45Days = useMemo(() => {
     const fortyFiveDaysAgo = new Date(now.getTime() - 45 * 86400000);
@@ -269,19 +277,17 @@ export const DashboardView: React.FC = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* Top Banner with Scope & My Tenders Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4.5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-base font-bold text-slate-900 tracking-tight">
-            Commercial Operations Dashboard
-          </h1>
+          <h1 className="text-base font-semibold text-slate-900">Dashboard</h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            Real-time pipeline monitoring, award conversion, and pricing intelligence across Abu Dhabi & Dubai.
+            Abu Dhabi &amp; Dubai · {kpi.totalCount} tenders
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          {currentUser.role !== 'USER' && (
-            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer">
+          {hasFullAccess(currentUser) && (
+            <label className="flex items-center gap-2 text-xs font-medium text-slate-700 bg-slate-50 px-3 py-1.5 rounded-md border border-slate-300 cursor-pointer">
               <input
                 type="checkbox"
                 checked={myTendersOnly}
@@ -295,7 +301,7 @@ export const DashboardView: React.FC = () => {
           <button
             type="button"
             onClick={() => router.push('/tenders')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors shadow-xs hover:shadow-sm cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer"
           >
             <span>View All Tenders</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
@@ -305,61 +311,69 @@ export const DashboardView: React.FC = () => {
 
       {/* Alert Strip */}
       {(overdueFollowUps.length > 0 ||
+        pastFollowUpWindow.length > 0 ||
         noActivity45Days.length > 0 ||
         awardedMissingContractDate.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {overdueFollowUps.length > 0 && (
-            <div
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          {pastFollowUpWindow.length > 0 && (
+            <button
+              type="button"
               onClick={() => router.push('/followups')}
-              className="p-3 bg-white border border-rose-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-rose-50/40 transition-colors shadow-2xs"
+              className="text-left bg-white border border-slate-300 border-l-2 border-l-[#8b151b] rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-700 border border-rose-200/60 flex items-center justify-center font-bold text-xs font-mono">
-                  {overdueFollowUps.length}
-                </div>
-                <div>
-                  <div className="font-semibold text-xs text-rose-950">Overdue Follow-ups</div>
-                  <div className="text-[11px] text-rose-700">Immediate action needed</div>
-                </div>
-              </div>
-              <ArrowUpRight className="w-4 h-4 text-rose-400" />
-            </div>
+              <span className="text-lg font-semibold font-mono text-[#8b151b] tabular-nums leading-none">
+                {pastFollowUpWindow.length}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-medium text-slate-900">Past {FOLLOW_UP_WINDOW_MONTHS}-month deadline</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">Needs a clear status</span>
+              </span>
+            </button>
           )}
-
+          {overdueFollowUps.length > 0 && (
+            <button
+              type="button"
+              onClick={() => router.push('/followups')}
+              className="text-left bg-white border border-slate-300 border-l-2 border-l-rose-500 rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+            >
+              <span className="text-lg font-semibold font-mono text-rose-700 tabular-nums leading-none">
+                {overdueFollowUps.length}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-medium text-slate-900">Overdue follow-ups</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">Scheduled touchpoint has passed</span>
+              </span>
+            </button>
+          )}
           {noActivity45Days.length > 0 && (
-            <div
+            <button
+              type="button"
               onClick={() => router.push('/tenders')}
-              className="p-3 bg-white border border-amber-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-amber-50/40 transition-colors shadow-2xs"
+              className="text-left bg-white border border-slate-300 border-l-2 border-l-amber-500 rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 border border-amber-200/60 flex items-center justify-center font-bold text-xs font-mono">
-                  {noActivity45Days.length}
-                </div>
-                <div>
-                  <div className="font-semibold text-xs text-amber-950">No Activity in 45 Days</div>
-                  <div className="text-[11px] text-amber-700">Stale submitted tenders</div>
-                </div>
-              </div>
-              <ArrowUpRight className="w-4 h-4 text-amber-400" />
-            </div>
+              <span className="text-lg font-semibold font-mono text-amber-700 tabular-nums leading-none">
+                {noActivity45Days.length}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-medium text-slate-900">No activity in 45 days</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">Stale submitted tenders</span>
+              </span>
+            </button>
           )}
-
           {awardedMissingContractDate.length > 0 && (
-            <div
+            <button
+              type="button"
               onClick={() => router.push('/awarded')}
-              className="p-3 bg-white border border-purple-200/80 rounded-xl flex items-center justify-between cursor-pointer hover:bg-purple-50/40 transition-colors shadow-2xs"
+              className="text-left bg-white border border-slate-300 border-l-2 border-l-slate-400 rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 border border-purple-200/60 flex items-center justify-center font-bold text-xs font-mono">
-                  {awardedMissingContractDate.length}
-                </div>
-                <div>
-                  <div className="font-semibold text-xs text-purple-950">Missing Contract Date</div>
-                  <div className="text-[11px] text-purple-700">Awarded compliance check</div>
-                </div>
-              </div>
-              <ArrowUpRight className="w-4 h-4 text-purple-400" />
-            </div>
+              <span className="text-lg font-semibold font-mono text-slate-700 tabular-nums leading-none">
+                {awardedMissingContractDate.length}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-medium text-slate-900">Missing contract date</span>
+                <span className="block text-[11px] text-slate-500 mt-0.5">Awarded, not yet dated</span>
+              </span>
+            </button>
           )}
         </div>
       )}
@@ -367,11 +381,11 @@ export const DashboardView: React.FC = () => {
       {/* Minimalist Metric Cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
         {/* Total Tenders */}
-        <div className="bg-white p-4.5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white p-4.5 rounded-md border border-slate-300">
+          <div className="text-[11px] font-medium text-slate-400">
             Total Tenders
           </div>
-          <div className="text-2xl font-bold tracking-tight text-slate-900 mt-1 font-mono">
+          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
             {kpi.totalCount}
           </div>
           <div className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
@@ -381,11 +395,11 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Total Tender Value */}
-        <div className="bg-white p-4.5 rounded-xl border border-slate-200/80 border-t-2 border-t-[#8b151b] shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-[#8b151b]">
+        <div className="bg-white p-4.5 rounded-md border border-slate-300">
+          <div className="text-[11px] font-medium text-slate-400">
             Total Quoted Value
           </div>
-          <div className="text-2xl font-bold tracking-tight text-slate-900 mt-1 font-mono">
+          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
             {formatCompact(kpi.totalValFils)}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 font-mono">
@@ -394,11 +408,11 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Active Pipeline */}
-        <div className="bg-white p-4.5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white p-4.5 rounded-md border border-slate-300">
+          <div className="text-[11px] font-medium text-slate-400">
             Active Pipeline
           </div>
-          <div className="text-2xl font-bold tracking-tight text-slate-900 mt-1 font-mono">
+          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
             {kpi.activeCount}
           </div>
           <div className="text-[11px] text-blue-600 font-medium mt-1 font-mono">
@@ -407,13 +421,13 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Awarded */}
-        <div className="bg-white p-4.5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white p-4.5 rounded-md border border-slate-300">
+          <div className="text-[11px] font-medium text-slate-400">
             Awarded Contracts
           </div>
           <div className="text-2xl font-bold tracking-tight text-slate-900 mt-1 flex items-baseline gap-2 font-mono">
             <span>{kpi.awardedCount}</span>
-            <span className="text-[11px] font-medium px-1.5 py-0.2 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+            <span className="text-[11px] font-medium px-1.5 py-0.2 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-300">
               {kpi.winRate}% win
             </span>
           </div>
@@ -423,11 +437,11 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Rejected */}
-        <div className="bg-white p-4.5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
-          <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+        <div className="bg-white p-4.5 rounded-md border border-slate-300">
+          <div className="text-[11px] font-medium text-slate-400">
             Lost / Rejected
           </div>
-          <div className="text-2xl font-bold tracking-tight text-slate-900 mt-1 font-mono">
+          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
             {kpi.rejectedCount}
           </div>
           <div className="text-[11px] text-slate-400 font-medium mt-1 font-mono">
@@ -439,7 +453,7 @@ export const DashboardView: React.FC = () => {
       {/* Row 1 Charts: Monthly Volume & Pipeline Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Monthly Volume */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="lg:col-span-2 bg-white p-5 rounded-md border border-slate-300">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-semibold text-sm text-slate-900">
@@ -479,7 +493,7 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Pipeline Funnel */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-md border border-slate-300 flex flex-col justify-between">
           <div>
             <h3 className="font-semibold text-sm text-slate-900">
               Tender Conversion Funnel
@@ -509,7 +523,7 @@ export const DashboardView: React.FC = () => {
             ))}
           </div>
 
-          <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 text-xs text-slate-600">
+          <div className="p-3 bg-slate-50 rounded-md border border-slate-200 text-xs text-slate-600">
             <span className="font-semibold text-slate-900">Benchmark insight: </span>
             Conversion from Under Review to Awarded currently stands at {funnelData[2].pct}.
           </div>
@@ -517,14 +531,14 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* Row 2: Price Per SQM Scatter Chart */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="bg-white p-5 rounded-md border border-slate-300">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-semibold text-sm text-slate-900">
                 Price per SQM Threshold Scatter Analysis
               </h3>
-              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300">
                 Commercial Benchmark
               </span>
             </div>
@@ -538,7 +552,7 @@ export const DashboardView: React.FC = () => {
             <select
               value={scatterLocation}
               onChange={(e) => setScatterLocation(e.target.value)}
-              className="text-xs p-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 outline-none"
+              className="text-xs p-1.5 rounded-md border border-slate-300 bg-white font-medium text-slate-700 outline-none"
             >
               <option value="ALL">All Locations</option>
               {uniqueLocations.map((loc) => (
@@ -551,7 +565,7 @@ export const DashboardView: React.FC = () => {
             <select
               value={scatterYear}
               onChange={(e) => setScatterYear(e.target.value)}
-              className="text-xs p-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 outline-none"
+              className="text-xs p-1.5 rounded-md border border-slate-300 bg-white font-medium text-slate-700 outline-none"
             >
               <option value="ALL">All Years</option>
               <option value="2026">2026</option>
@@ -591,7 +605,7 @@ export const DashboardView: React.FC = () => {
                   if (!payload || !payload.length) return null;
                   const data = payload[0].payload;
                   return (
-                    <div className="bg-white p-3 rounded-lg shadow-lg border border-slate-200 text-xs">
+                    <div className="bg-white p-3 rounded-md shadow-lg border border-slate-300 text-xs">
                       <div className="font-semibold text-slate-900">
                         Tender #{data.tenderNumber} - {data.client}
                       </div>
@@ -632,7 +646,7 @@ export const DashboardView: React.FC = () => {
       {/* Row 3: Source-wise Performance & Location Distribution */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Source Performance */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="bg-white p-5 rounded-md border border-slate-300">
           <h3 className="font-semibold text-sm text-slate-900 mb-1">
             Top Source Performance (Lead Attribution)
           </h3>
@@ -664,7 +678,7 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Location Distribution */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+        <div className="bg-white p-5 rounded-md border border-slate-300">
           <h3 className="font-semibold text-sm text-slate-900 mb-1">
             Top Locations Distribution
           </h3>
@@ -695,7 +709,7 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* Side Panels: Follow-ups Due This Week */}
-      <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+      <div className="bg-white p-5 rounded-md border border-slate-300">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold text-sm text-slate-900">
@@ -715,7 +729,7 @@ export const DashboardView: React.FC = () => {
           </button>
         </div>
 
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-200">
           {followUpsDueThisWeek.length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-400">
               No follow-ups due this week. All pipelines current!
@@ -727,7 +741,7 @@ export const DashboardView: React.FC = () => {
                 <div
                   key={t.id}
                   onClick={() => router.push(`/tenders/${t.id}`)}
-                  className="py-3 flex items-center justify-between gap-4 hover:bg-slate-50 px-2 rounded-lg cursor-pointer transition-colors"
+                  className="py-3 flex items-center justify-between gap-4 hover:bg-slate-50 px-2 rounded-md cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -759,8 +773,8 @@ export const DashboardView: React.FC = () => {
                     <span
                       className={`text-[10.5px] font-medium font-mono px-2 py-0.5 rounded-md ${
                         isOverdue
-                          ? 'bg-rose-50 text-rose-700 border border-rose-200/60'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                          ? 'bg-rose-50 text-rose-700 border border-rose-300'
+                          : 'bg-amber-50 text-amber-700 border border-amber-300'
                       }`}
                     >
                       {isOverdue ? 'Overdue' : 'Due Soon'}

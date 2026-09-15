@@ -53,10 +53,10 @@ export const CANONICAL_SOURCES: SourceDefinition[] = [
     aliases: ['eng hassan', 'engr hassan', 'sir engr hassan', 'eng.hassan', 'eng. hassan'],
   },
   {
-    canonical: 'Sir Yaqoob',
+    canonical: 'Sir Yaqub',
     kind: 'PERSON',
     emailPrefix: 'yaqoob@',
-    aliases: ['eng yaqub', 'sir yaqoob', 'yaqoob', 'engr yaqub'],
+    aliases: ['eng yaqub', 'sir yaqub', 'sir yaqoob', 'yaqoob', 'yaqub', 'engr yaqub'],
   },
   {
     canonical: 'Engr Bilal',
@@ -65,16 +65,16 @@ export const CANONICAL_SOURCES: SourceDefinition[] = [
     aliases: ['engr bilal', 'eng bilal', 'sir engr bilal', 'bilal'],
   },
   {
-    canonical: 'Engr Shahzaib',
+    canonical: 'Syed Shahzaib',
     kind: 'PERSON',
     emailPrefix: 'shahzaib@',
     aliases: ['eng. shahzaib', 'eng syed shahzaib', 'engr shahzaib', 'shahzaib'],
   },
   {
-    canonical: 'Engr Waqas',
+    canonical: 'Engr Waseem',
     kind: 'PERSON',
-    emailPrefix: 'waqas@',
-    aliases: ['eng waqas', 'engr waqas', 'waqas'],
+    emailPrefix: 'waseem@',
+    aliases: ['eng waseem', 'engr waseem', 'waseem', 'eng waqas', 'engr waqas', 'waqas'],
   },
   {
     canonical: 'Engr Zeeshan',
@@ -107,6 +107,18 @@ export const CANONICAL_SOURCES: SourceDefinition[] = [
     canonical: 'CD Tender',
     kind: 'OTHER',
     aliases: ['cd tender', 'cd'],
+  },
+  {
+    canonical: 'Engr Hamad',
+    kind: 'PERSON',
+    emailPrefix: 'hamad@',
+    aliases: ['eng hamad', 'engr hamad', 'hamad'],
+  },
+  {
+    canonical: 'Haseeb',
+    kind: 'PERSON',
+    emailPrefix: 'haseeb@',
+    aliases: ['haseeb', 'mr haseeb'],
   },
 ];
 

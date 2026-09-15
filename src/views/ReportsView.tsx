@@ -150,11 +150,11 @@ export const ReportsView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-base font-semibold text-slate-900">
             Commercial Analytics & Win-Loss Intelligence
           </h1>
           <p className="text-xs text-slate-500">
-            Consultant conversion efficacy, pricing rejection dynamics, and villa scale analytics
+            Win rates by consultant, price per square metre, and rejection reasons.
           </p>
         </div>
 
@@ -162,7 +162,7 @@ export const ReportsView: React.FC = () => {
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(e.target.value)}
-            className="text-xs p-1.5 rounded-lg border border-gray-300 bg-white font-medium"
+            className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium"
           >
             <option value="ALL">All Fiscal Years</option>
             <option value="2026">2026</option>
@@ -173,7 +173,7 @@ export const ReportsView: React.FC = () => {
           <button
             type="button"
             onClick={handleExportSummary}
-            className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 flex items-center gap-1.5 shadow-xs cursor-pointer"
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-gray-700 bg-white border border-slate-300 hover:bg-gray-50 flex items-center gap-1.5 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5 text-emerald-700" />
             <span>Export Analytics Report</span>
@@ -184,7 +184,7 @@ export const ReportsView: React.FC = () => {
       {/* Row 1: Rejection Reasons & Size Buckets */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Rejection Reasons */}
-        <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-xs">
+        <div className="bg-white p-5 rounded-md border border-[var(--border)]">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-sm text-slate-900">
@@ -229,7 +229,7 @@ export const ReportsView: React.FC = () => {
         </div>
 
         {/* Win Rate by Size Bucket */}
-        <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-xs">
+        <div className="bg-white p-5 rounded-md border border-[var(--border)]">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-sm text-slate-900">
@@ -258,7 +258,7 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* Row 2: Consultant Conversion Efficiency */}
-      <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-xs">
+      <div className="bg-white p-5 rounded-md border border-[var(--border)]">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-bold text-sm text-slate-900">
@@ -273,7 +273,7 @@ export const ReportsView: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              <tr className="border-b border-slate-300 bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                 <th className="p-2.5">Consultant Engineering Firm</th>
                 <th className="p-2.5 text-center">Awarded</th>
                 <th className="p-2.5 text-center">Rejected</th>
@@ -282,7 +282,7 @@ export const ReportsView: React.FC = () => {
                 <th className="p-2.5 text-right">Quoted Volume (AED M)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="divide-y divide-slate-200">
               {consultantData.map((c) => (
                 <tr key={c.name} className="hover:bg-gray-50">
                   <td className="p-2.5 font-bold text-gray-800">{c.name}</td>

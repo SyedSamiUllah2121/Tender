@@ -7,7 +7,8 @@ import { useAuth } from '../context/AuthContext';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { toFils, fromFils, formatAED } from '../lib/money';
 import { pricePerSqm, formatPricePerSqm } from '../lib/derive';
-import { Region, TenderStatus } from '../types';
+import { Region, TenderStatus, ROLE_LABELS } from '../types';
+import { can } from '../lib/permissions';
 
 export const TenderFormView: React.FC = () => {
   const router = useRouter();
@@ -32,6 +33,9 @@ export const TenderFormView: React.FC = () => {
   const [tenderAmountAED, setTenderAmountAED] = useState('');
   const [targetPriceAED, setTargetPriceAED] = useState('');
   const [totalAreaSqm, setTotalAreaSqm] = useState<string>('');
+
+  // Only the Manager, Admin 1 and Admin 2 assign tenders to a salesperson.
+  const canAssign = can(currentUser, 'reassign_owner');
 
   // Attribution
   const [sourceId, setSourceId] = useState('');
@@ -102,7 +106,7 @@ export const TenderFormView: React.FC = () => {
         remarks,
         commissionNote,
         sourceId: sourceId || null,
-        ownerId: currentUser.role === 'USER' ? currentUser.id : ownerId,
+        ownerId: canAssign ? ownerId : currentUser.id,
         consultantId: consultantId || null,
         receivedAt: new Date(receivedAt).toISOString(),
         submittedAt: submittedAt ? new Date(submittedAt).toISOString() : null,
@@ -130,22 +134,22 @@ export const TenderFormView: React.FC = () => {
           <span>Cancel & Return</span>
         </button>
 
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+        <h1 className="text-base font-semibold text-slate-900">
           Create New Commercial Tender
         </h1>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2">
+          <div className="p-4 bg-rose-50 border border-rose-300 rounded-md text-xs text-rose-800 flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 mt-0.5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {/* 1. Identification */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#8b151b] border-b border-slate-100 pb-2">
+        <div className="bg-white p-6 rounded-md border border-slate-300 space-y-4">
+          <h2 className="text-xs font-semibold text-slate-900 border-b border-slate-300 pb-2">
             1. Tender Identification
           </h2>
 
@@ -159,7 +163,7 @@ export const TenderFormView: React.FC = () => {
                 required
                 value={tenderNumber}
                 onChange={(e) => setTenderNumber(parseInt(e.target.value, 10))}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 bg-gray-50 focus:bg-white font-mono font-bold text-slate-900"
+                className="w-full text-xs p-2 rounded-md border border-slate-400 bg-gray-50 focus:bg-white font-mono font-bold text-slate-900"
               />
             </div>
 
@@ -172,7 +176,7 @@ export const TenderFormView: React.FC = () => {
                 required
                 value={fiscalYear}
                 onChange={(e) => setFiscalYear(parseInt(e.target.value, 10))}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
 
@@ -184,15 +188,15 @@ export const TenderFormView: React.FC = () => {
                 type="text"
                 value={revision}
                 onChange={(e) => setRevision(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
           </div>
         </div>
 
         {/* 2. Client & Site */}
-        <div className="bg-white p-6 rounded-2xl border border-[var(--border)] shadow-xs space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#8b151b] border-b border-gray-100 pb-2">
+        <div className="bg-white p-6 rounded-md border border-[var(--border)] space-y-4">
+          <h2 className="text-xs font-semibold text-slate-900 border-b border-slate-300 pb-2">
             2. Client & Site Location
           </h2>
 
@@ -207,7 +211,7 @@ export const TenderFormView: React.FC = () => {
                 value={clientNameRaw}
                 onChange={(e) => setClientNameRaw(e.target.value)}
                 placeholder="e.g. Mr. Saleh Salem Ali Al Minhali"
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
 
@@ -220,7 +224,7 @@ export const TenderFormView: React.FC = () => {
                 value={clientContact}
                 onChange={(e) => setClientContact(e.target.value)}
                 placeholder="050-XXXXXXX"
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
 
@@ -234,7 +238,7 @@ export const TenderFormView: React.FC = () => {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="e.g. Madinat Al Riyad, Zayed City..."
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
 
@@ -245,7 +249,7 @@ export const TenderFormView: React.FC = () => {
               <select
                 value={region}
                 onChange={(e) => setRegion(e.target.value as Region)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 bg-white font-medium"
+                className="w-full text-xs p-2 rounded-md border border-slate-400 bg-white font-medium"
               >
                 <option value="ABU_DHABI">Abu Dhabi</option>
                 <option value="DUBAI">Dubai</option>
@@ -256,8 +260,8 @@ export const TenderFormView: React.FC = () => {
         </div>
 
         {/* 3. Commercials (with live price/sqm) */}
-        <div className="bg-white p-6 rounded-2xl border border-[var(--border)] shadow-xs space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#8b151b] border-b border-gray-100 pb-2">
+        <div className="bg-white p-6 rounded-md border border-[var(--border)] space-y-4">
+          <h2 className="text-xs font-semibold text-slate-900 border-b border-slate-300 pb-2">
             3. Commercial Pricing & Area
           </h2>
 
@@ -271,7 +275,7 @@ export const TenderFormView: React.FC = () => {
                 value={tenderAmountAED}
                 onChange={(e) => setTenderAmountAED(e.target.value)}
                 placeholder="e.g. 2,450,000"
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 font-mono font-bold"
+                className="w-full text-xs p-2 rounded-md border border-slate-400 font-mono font-bold"
               />
             </div>
 
@@ -284,7 +288,7 @@ export const TenderFormView: React.FC = () => {
                 value={targetPriceAED}
                 onChange={(e) => setTargetPriceAED(e.target.value)}
                 placeholder="e.g. 2,300,000"
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 font-mono"
+                className="w-full text-xs p-2 rounded-md border border-slate-400 font-mono"
               />
             </div>
 
@@ -298,10 +302,10 @@ export const TenderFormView: React.FC = () => {
                 value={totalAreaSqm}
                 onChange={(e) => setTotalAreaSqm(e.target.value)}
                 placeholder="e.g. 850"
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 font-mono"
+                className="w-full text-xs p-2 rounded-md border border-slate-400 font-mono"
               />
               {/* Live computed price/sqm shown read-only under area field */}
-              <div className="mt-1.5 p-1.5 bg-gray-50 rounded text-[11px] font-mono flex items-center justify-between border border-gray-200">
+              <div className="mt-1.5 p-1.5 bg-gray-50 rounded text-[11px] font-mono flex items-center justify-between border border-slate-300">
                 <span className="text-gray-500">Live Rate / m²:</span>
                 <span
                   className={`font-bold ${
@@ -318,8 +322,8 @@ export const TenderFormView: React.FC = () => {
         </div>
 
         {/* 4. Attribution & Consultant */}
-        <div className="bg-white p-6 rounded-2xl border border-[var(--border)] shadow-xs space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#8b151b] border-b border-gray-100 pb-2">
+        <div className="bg-white p-6 rounded-md border border-[var(--border)] space-y-4">
+          <h2 className="text-xs font-semibold text-slate-900 border-b border-slate-300 pb-2">
             4. Attribution & Consultant
           </h2>
 
@@ -331,7 +335,7 @@ export const TenderFormView: React.FC = () => {
               <select
                 value={sourceId}
                 onChange={(e) => setSourceId(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 bg-white"
+                className="w-full text-xs p-2 rounded-md border border-slate-400 bg-white"
               >
                 <option value="">Select Source...</option>
                 {sources.map((s) => (
@@ -347,20 +351,20 @@ export const TenderFormView: React.FC = () => {
                 Tender Owner
               </label>
               <select
-                value={currentUser.role === 'USER' ? currentUser.id : ownerId}
+                value={canAssign ? ownerId : currentUser.id}
                 onChange={(e) => setOwnerId(e.target.value)}
-                disabled={currentUser.role === 'USER'}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 bg-white font-medium disabled:bg-gray-100"
+                disabled={!canAssign}
+                className="w-full text-xs p-2 rounded-md border border-slate-400 bg-white font-medium disabled:bg-gray-100"
               >
                 {allUsers.map((u) => (
                   <option key={u.id} value={u.id}>
-                    {u.name} {u.role === 'USER' ? `(${u.region})` : ''}
+                    {u.name} — {ROLE_LABELS[u.role]}
                   </option>
                 ))}
               </select>
-              {currentUser.role === 'USER' && (
+              {!canAssign && (
                 <div className="text-[10px] text-gray-400 mt-0.5">
-                  Locked to self (Salesperson Role)
+                  Locked to you — only the Manager or an Admin can assign tenders.
                 </div>
               )}
             </div>
@@ -372,7 +376,7 @@ export const TenderFormView: React.FC = () => {
               <select
                 value={consultantId}
                 onChange={(e) => setConsultantId(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300 bg-white"
+                className="w-full text-xs p-2 rounded-md border border-slate-400 bg-white"
               >
                 <option value="">Select Consultant...</option>
                 {consultants.map((c) => (
@@ -386,8 +390,8 @@ export const TenderFormView: React.FC = () => {
         </div>
 
         {/* 5. Dates & Notes */}
-        <div className="bg-white p-6 rounded-2xl border border-[var(--border)] shadow-xs space-y-4">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-[#8b151b] border-b border-gray-100 pb-2">
+        <div className="bg-white p-6 rounded-md border border-[var(--border)] space-y-4">
+          <h2 className="text-xs font-semibold text-slate-900 border-b border-slate-300 pb-2">
             5. Timeline Dates & Scope Notes
           </h2>
 
@@ -401,20 +405,24 @@ export const TenderFormView: React.FC = () => {
                 required
                 value={receivedAt}
                 onChange={(e) => setReceivedAt(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Target Submission Date
+                Target Submission Date *
               </label>
               <input
                 type="date"
+                required
                 value={targetDate}
                 onChange={(e) => setTargetDate(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                Mandatory — monitored by Admin 2.
+              </div>
             </div>
 
             <div>
@@ -425,7 +433,7 @@ export const TenderFormView: React.FC = () => {
                 type="date"
                 value={submittedAt}
                 onChange={(e) => setSubmittedAt(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
           </div>
@@ -439,7 +447,7 @@ export const TenderFormView: React.FC = () => {
                 rows={2}
                 value={projectDetails}
                 onChange={(e) => setProjectDetails(e.target.value)}
-                className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                className="w-full text-xs p-2 rounded-md border border-slate-400"
               />
             </div>
 
@@ -453,7 +461,7 @@ export const TenderFormView: React.FC = () => {
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
                   placeholder="e.g. Received via WhatsApp, client requested urgent estimate..."
-                  className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                  className="w-full text-xs p-2 rounded-md border border-slate-400"
                 />
               </div>
 
@@ -466,7 +474,7 @@ export const TenderFormView: React.FC = () => {
                   value={commissionNote}
                   onChange={(e) => setCommissionNote(e.target.value)}
                   placeholder="e.g. 4%+2% or 2%"
-                  className="w-full text-xs p-2 rounded-lg border border-gray-300"
+                  className="w-full text-xs p-2 rounded-md border border-slate-400"
                 />
               </div>
             </div>
@@ -478,14 +486,14 @@ export const TenderFormView: React.FC = () => {
           <button
             type="button"
             onClick={() => router.push('/tenders')}
-            className="px-5 py-2.5 rounded-xl text-xs font-semibold text-gray-700 hover:bg-gray-100 cursor-pointer"
+            className="px-5 py-2.5 rounded-md text-xs font-semibold text-gray-700 hover:bg-gray-100 cursor-pointer"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] shadow-xs hover:shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-colors"
+            className="px-5 py-2 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-colors"
           >
             <Save className="w-3.5 h-3.5" />
             <span>{submitting ? 'Saving Tender...' : 'Save & Register Tender'}</span>

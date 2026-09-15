@@ -24,6 +24,12 @@ import { pricePerSqm, formatPricePerSqm } from '../lib/derive';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { StatusChangeModal } from '../components/modals/StatusChangeModal';
 import { can } from '../lib/permissions';
+import {
+  ACTIVE_STATUSES,
+  FOLLOW_UP_WINDOW_MONTHS,
+  RESOLUTION_LABELS,
+  deadlineState,
+} from '../lib/followUpPolicy';
 
 interface TenderDetailViewProps {
   tenderId: string;
@@ -61,11 +67,11 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
   // Acceptance checklist rule for 403 Scoped Confidentiality
   if (accessDenied) {
     return (
-      <div className="max-w-2xl mx-auto my-12 p-8 bg-white rounded-xl border border-slate-200 shadow-sm text-center space-y-4">
-        <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 border border-rose-200 flex items-center justify-center mx-auto">
+      <div className="max-w-2xl mx-auto my-12 p-8 bg-white rounded-md border border-slate-300 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 border border-rose-300 flex items-center justify-center mx-auto">
           <ShieldAlert className="w-6 h-6" />
         </div>
-        <div className="inline-block px-2.5 py-0.5 rounded text-xs font-mono font-medium bg-rose-50 text-rose-700 border border-rose-200">
+        <div className="inline-block px-2.5 py-0.5 rounded text-xs font-mono font-medium bg-rose-50 text-rose-700 border border-rose-300">
           HTTP 403 FORBIDDEN
         </div>
         <h2 className="text-base font-bold text-slate-900">Access Denied: Scoped Confidentiality</h2>
@@ -77,7 +83,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
           <button
             type="button"
             onClick={() => router.push('/tenders')}
-            className="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 cursor-pointer transition-colors"
+            className="px-4 py-2 rounded-md text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 cursor-pointer transition-colors"
           >
             Return to My Tenders Pipeline
           </button>
@@ -100,6 +106,12 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
     ? Math.round((nextFollowUpDate.getTime() - now.getTime()) / 86400000)
     : null;
   const isOverdue = daysToFollowUp !== null && daysToFollowUp < 0;
+
+  // Mandatory 2-month follow-up window.
+  const { state: windowState, deadlineAt, daysToDeadline } = deadlineState(tender, now);
+  const pastWindow = windowState === 'BREACHED';
+  const deadlineISO = deadlineAt ? deadlineAt.toISOString().substring(0, 10) : null;
+  const followUpCount = (tender.followUps || []).length;
 
   const pps = pricePerSqm(tender.tenderAmount, tender.totalAreaSqm);
 
@@ -217,7 +229,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
             <button
               type="button"
               onClick={handleDuplicateRevision}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Copy className="w-3.5 h-3.5 text-slate-400" />
               <span>Duplicate as Revision</span>
@@ -228,7 +240,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
             <button
               type="button"
               onClick={() => setShowStatusModal(true)}
-              className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] shadow-xs cursor-pointer transition-colors"
+              className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] cursor-pointer transition-colors"
             >
               Change Status
             </button>
@@ -236,12 +248,40 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
         </div>
       </div>
 
+      {/* 2-month rule breach banner */}
+      {pastWindow && (
+        <div className="p-4 rounded-md border border-red-300 bg-red-50 text-red-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0 text-red-700" />
+            <div className="text-xs">
+              <div className="font-bold">
+                {FOLLOW_UP_WINDOW_MONTHS}-month follow-up window closed on {deadlineISO}
+              </div>
+              <p className="mt-0.5 text-red-800">
+                Submitted {tender.submittedAt?.substring(0, 10)} ·{' '}
+                {Math.abs(daysToDeadline || 0)} day(s) past the deadline · {followUpCount} follow-up(s)
+                recorded. A clear status is required: {Object.values(RESOLUTION_LABELS).join(', ')}.
+              </p>
+            </div>
+          </div>
+          {can(currentUser, 'change_status', tender) && (
+            <button
+              type="button"
+              onClick={() => setShowStatusModal(true)}
+              className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white bg-red-700 hover:bg-red-800 shrink-0 cursor-pointer transition-colors"
+            >
+              Record Status
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Main 2-Column Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left Column: Summary & Tabs */}
         <div className="lg:col-span-2 space-y-5">
           {/* Header Summary Card */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] space-y-5">
+          <div className="bg-white p-6 rounded-md border border-slate-300 space-y-5">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
@@ -252,7 +292,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                     {tender.revision}
                   </span>
                   {tender.award?.projectNumber && (
-                    <span className="font-mono text-xs font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                    <span className="font-mono text-xs font-medium px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-300">
                       PJ/{tender.award.projectNumber}
                     </span>
                   )}
@@ -280,9 +320,9 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
             </div>
 
             {/* Commercial Highlights Strip */}
-            <div className="grid grid-cols-3 gap-3 p-3.5 bg-slate-50/75 rounded-xl border border-slate-100 text-xs">
+            <div className="grid grid-cols-3 gap-3 p-3.5 bg-slate-50 rounded-md border border-slate-200 text-xs">
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <div className="text-[11px] font-medium text-slate-400">
                   Quoted Amount
                 </div>
                 <div className="font-mono font-bold text-sm text-slate-900 mt-0.5">
@@ -296,7 +336,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
               </div>
 
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <div className="text-[11px] font-medium text-slate-400">
                   Total Area (SQM)
                 </div>
                 <div className="font-mono font-bold text-sm text-slate-900 mt-0.5">
@@ -308,7 +348,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
               </div>
 
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                <div className="text-[11px] font-medium text-slate-400">
                   Rate / SQM (Derived)
                 </div>
                 <div
@@ -326,7 +366,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
 
             {/* Rejection Notice if rejected */}
             {tender.status === 'REJECTED' && (
-              <div className="p-3 bg-rose-50 border border-rose-200/80 rounded-xl text-xs space-y-1">
+              <div className="p-3 bg-rose-50 border border-rose-300 rounded-md text-xs space-y-1">
                 <div className="font-semibold text-rose-950 flex items-center gap-1.5">
                   <AlertTriangle className="w-4 h-4 text-rose-600" />
                   <span>Rejection Reason: {tender.rejectReason || 'Unspecified'}</span>
@@ -339,7 +379,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
 
             {/* Award Notice if awarded */}
             {tender.status === 'AWARDED' && tender.award && (
-              <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-xl text-xs space-y-1">
+              <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-md text-xs space-y-1">
                 <div className="font-semibold text-emerald-950 flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                   <span>Awarded Contract: PJ/{tender.award.projectNumber}</span>
@@ -356,7 +396,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
 
             {/* Scope of Work details */}
             <div className="space-y-1 pt-1">
-              <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+              <div className="text-[11px] font-medium text-slate-400">
                 Project Details / Scope
               </div>
               <p className="text-xs text-slate-700 leading-relaxed">
@@ -364,7 +404,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
               </p>
               {tender.remarks && (
                 <div className="pt-2">
-                  <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+                  <div className="text-[11px] font-medium text-slate-400">
                     Remarks
                   </div>
                   <p className="text-xs text-slate-600 italic">{tender.remarks}</p>
@@ -374,8 +414,8 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
           </div>
 
           {/* Tab Navigation & Content */}
-          <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
-            <div className="flex border-b border-slate-200/80 bg-slate-50/50 text-xs">
+          <div className="bg-white rounded-md border border-slate-300 overflow-hidden">
+            <div className="flex border-b border-slate-300 bg-slate-50 text-xs">
               <button
                 type="button"
                 onClick={() => setActiveTab('activity')}
@@ -431,10 +471,10 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                       No activity recorded yet.
                     </div>
                   ) : (
-                    <div className="relative pl-5 border-l border-slate-200 space-y-4">
+                    <div className="relative pl-5 border-l border-slate-300 space-y-4">
                       {mergedTimeline.map((item) => (
                         <div key={item.id} className="relative">
-                          <div className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white bg-slate-900 shadow-2xs" />
+                          <div className="absolute -left-[25px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-white bg-slate-900" />
                           <div className="text-xs">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-slate-900">{item.actor}</span>
@@ -462,7 +502,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                             )}
 
                             {item.type === 'followup' && (
-                              <div className="text-slate-700 mt-0.5 bg-amber-50/50 p-2.5 rounded-lg border border-amber-200/60">
+                              <div className="text-slate-700 mt-0.5 bg-amber-50 p-2.5 rounded-md border border-amber-300">
                                 <span className="font-semibold text-amber-900">
                                   {item.method} Touchpoint:
                                 </span>{' '}
@@ -476,7 +516,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                             )}
 
                             {item.type === 'comment' && (
-                              <div className="text-slate-800 mt-0.5 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                              <div className="text-slate-800 mt-0.5 bg-slate-50 p-2.5 rounded-md border border-slate-200">
                                 {item.body}
                               </div>
                             )}
@@ -497,7 +537,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                       value={commentText}
                       onChange={(e) => setCommentText(e.target.value)}
                       placeholder="Add an internal note or use @Name to mention a colleague..."
-                      className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:border-slate-400 outline-none text-slate-900 bg-slate-50/50 focus:bg-white transition-colors"
+                      className="w-full text-xs p-3 rounded-md border border-slate-300 focus:border-slate-400 outline-none text-slate-900 bg-slate-50 focus:bg-white transition-colors"
                     />
                     <div className="flex justify-between items-center">
                       <span className="text-[11px] text-slate-400">
@@ -506,7 +546,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                       <button
                         type="submit"
                         disabled={!commentText.trim()}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-colors shadow-xs"
+                        className="px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 cursor-pointer disabled:opacity-40 transition-colors"
                       >
                         <Send className="w-3.5 h-3.5" />
                         <span>Post Comment</span>
@@ -514,7 +554,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                     </div>
                   </form>
 
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-200">
                     {(tender.comments || []).length === 0 ? (
                       <div className="text-center py-6 text-xs text-slate-400">
                         No comments yet. Start a discussion with your team!
@@ -557,7 +597,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                       <button
                         type="button"
                         onClick={() => setShowFollowUpForm(true)}
-                        className="px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg cursor-pointer transition-colors shadow-xs"
+                        className="px-3 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-md cursor-pointer transition-colors"
                       >
                         + Log Follow-up
                       </button>
@@ -565,7 +605,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                   </div>
 
                   {showFollowUpForm && (
-                    <form onSubmit={handleLogFollowUp} className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <form onSubmit={handleLogFollowUp} className="p-4 bg-slate-50 border border-slate-300 rounded-md space-y-3">
                       <div className="text-xs font-semibold text-slate-900">
                         Record New Client Interaction
                       </div>
@@ -578,7 +618,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                           <select
                             value={fuMethod}
                             onChange={(e) => setFuMethod(e.target.value as any)}
-                            className="w-full text-xs p-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 outline-none"
+                            className="w-full text-xs p-1.5 rounded-md border border-slate-300 bg-white text-slate-800 outline-none"
                           >
                             <option value="Call">Phone Call</option>
                             <option value="WhatsApp">WhatsApp</option>
@@ -594,8 +634,9 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                           <input
                             type="date"
                             value={fuNextDate}
+                            max={deadlineISO || undefined}
                             onChange={(e) => setFuNextDate(e.target.value)}
-                            className="w-full text-xs p-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 outline-none"
+                            className="w-full text-xs p-1.5 rounded-md border border-slate-300 bg-white text-slate-800 outline-none"
                           />
                         </div>
                       </div>
@@ -610,7 +651,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                           value={fuOutcome}
                           onChange={(e) => setFuOutcome(e.target.value)}
                           placeholder="e.g. Spoke with client engineer. Tender is undergoing structural valuation..."
-                          className="w-full text-xs p-2 rounded-lg border border-slate-200 bg-white text-slate-800 outline-none"
+                          className="w-full text-xs p-2 rounded-md border border-slate-300 bg-white text-slate-800 outline-none"
                         />
                       </div>
 
@@ -618,13 +659,13 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                         <button
                           type="button"
                           onClick={() => setShowFollowUpForm(false)}
-                          className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded-lg cursor-pointer transition-colors"
+                          className="px-3 py-1 text-xs text-slate-600 hover:bg-slate-200 rounded-md cursor-pointer transition-colors"
                         >
                           Cancel
                         </button>
                         <button
                           type="submit"
-                          className="px-3.5 py-1 text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] rounded-lg cursor-pointer transition-colors shadow-xs"
+                          className="px-3.5 py-1 text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] rounded-md cursor-pointer transition-colors"
                         >
                           Save Touchpoint
                         </button>
@@ -632,7 +673,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
                     </form>
                   )}
 
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-200">
                     {(tender.followUps || []).length === 0 ? (
                       <div className="text-center py-6 text-xs text-slate-400">
                         No follow-up touchpoints recorded yet.
@@ -668,7 +709,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
               {/* TAB 4: Attachments */}
               {activeTab === 'attachments' && (
                 <div className="space-y-4">
-                  <div className="p-8 border border-dashed border-slate-300 rounded-xl text-center space-y-2 bg-slate-50/50">
+                  <div className="p-8 border border-dashed border-slate-300 rounded-md text-center space-y-2 bg-slate-50">
                     <Paperclip className="w-6 h-6 text-slate-400 mx-auto" />
                     <div className="text-xs font-medium text-slate-700">
                       Drag & drop architectural drawings, BOQ, or contract documents
@@ -684,9 +725,9 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
         {/* Right Rail: Status, Owner, Consultant */}
         <div className="space-y-5">
           {/* Status & Next Follow-up Card */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] space-y-4">
+          <div className="bg-white p-5 rounded-md border border-slate-300 space-y-4">
             <div>
-              <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">
+              <div className="text-[11px] font-medium text-slate-400 mb-1.5">
                 Workflow Status
               </div>
               <div className="flex items-center justify-between">
@@ -703,13 +744,43 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
               </div>
             </div>
 
-            {/* Next Follow-up Countdown */}
-            {tender.nextFollowUpAt && ['SUBMITTED', 'UNDER_REVIEW', 'ON_HOLD'].includes(tender.status) && (
+            {/* 2-Month Follow-up Window */}
+            {deadlineISO && (
               <div
-                className={`p-3 rounded-xl border ${
+                className={`p-3 rounded-md border ${
+                  pastWindow
+                    ? 'bg-red-50 border-red-300 text-red-900'
+                    : windowState === 'RESOLVED'
+                    ? 'bg-slate-50 border-slate-300 text-slate-700'
+                    : 'bg-white border-slate-300 text-slate-700'
+                }`}
+              >
+                <div className="text-[11px] font-medium text-slate-400 mb-1">
+                  {FOLLOW_UP_WINDOW_MONTHS}-Month Follow-up Window
+                </div>
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="font-mono">{deadlineISO}</span>
+                  <span>
+                    {windowState === 'RESOLVED'
+                      ? 'Status recorded'
+                      : daysToDeadline !== null && daysToDeadline < 0
+                      ? `${Math.abs(daysToDeadline)}d over`
+                      : `${daysToDeadline}d left`}
+                  </span>
+                </div>
+                <div className="text-[11px] mt-1 text-slate-500">
+                  {followUpCount} follow-up{followUpCount === 1 ? '' : 's'} recorded
+                </div>
+              </div>
+            )}
+
+            {/* Next Follow-up Countdown */}
+            {tender.nextFollowUpAt && ACTIVE_STATUSES.includes(tender.status) && (
+              <div
+                className={`p-3 rounded-md border ${
                   isOverdue
-                    ? 'bg-rose-50/60 border-rose-200/80 text-rose-900'
-                    : 'bg-amber-50/60 border-amber-200/80 text-amber-900'
+                    ? 'bg-rose-50 border-rose-300 text-rose-900'
+                    : 'bg-amber-50 border-amber-300 text-amber-900'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -738,12 +809,12 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
           </div>
 
           {/* Owner Attribution Card */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] space-y-3">
-            <div className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
+          <div className="bg-white p-5 rounded-md border border-slate-300 space-y-3">
+            <div className="text-[11px] font-medium text-slate-400">
               Assigned Tender Owner
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-800 font-semibold text-xs flex items-center justify-center border border-slate-200">
+              <div className="w-8 h-8 rounded-md bg-slate-100 text-slate-800 font-semibold text-xs flex items-center justify-center border border-slate-300">
                 {tender.owner?.name?.charAt(0) || 'U'}
               </div>
               <div>
@@ -754,7 +825,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
               </div>
             </div>
 
-            <div className="pt-2 border-t border-slate-100 text-xs text-slate-600 space-y-1.5">
+            <div className="pt-2 border-t border-slate-200 text-xs text-slate-600 space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-slate-500">Lead Source:</span>
                 <span className="font-medium text-slate-900">

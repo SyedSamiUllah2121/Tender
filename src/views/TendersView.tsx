@@ -19,7 +19,7 @@ import { Tender, TenderStatus } from '../types';
 import { formatAED, fromFils } from '../lib/money';
 import { pricePerSqm } from '../lib/derive';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import { can } from '../lib/permissions';
+import { can, hasFullAccess } from '../lib/permissions';
 
 export const TendersView: React.FC = () => {
   const router = useRouter();
@@ -272,10 +272,10 @@ export const TendersView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-bold text-slate-900 tracking-tight">
+            <h1 className="text-base font-semibold text-slate-900">
               Tenders Pipeline
             </h1>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-200/80">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-300">
               {filteredTenders.length} entries
             </span>
           </div>
@@ -286,7 +286,7 @@ export const TendersView: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {/* Export Segmented Control */}
-          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 shadow-2xs">
+          <div className="inline-flex rounded-md border border-slate-300 bg-white p-0.5">
             <button
               type="button"
               onClick={handleExportFiltered}
@@ -313,7 +313,7 @@ export const TendersView: React.FC = () => {
             <button
               type="button"
               onClick={() => router.push('/tenders/new')}
-              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 transition-all cursor-pointer"
             >
               <PlusCircle className="w-3.5 h-3.5 text-red-200" />
               <span>New Tender</span>
@@ -323,7 +323,7 @@ export const TendersView: React.FC = () => {
       </div>
 
       {/* Responsive Filter Bar */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] space-y-3">
+      <div className="bg-white p-4 rounded-md border border-slate-300 space-y-3">
         {/* Global Search row */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
@@ -336,14 +336,14 @@ export const TendersView: React.FC = () => {
                 setPage(1);
               }}
               placeholder="Search by tender #, client name, location, project #..."
-              className="w-full pl-8.5 pr-4 py-1.5 text-xs rounded-lg border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-[#8b151b]/60 focus:ring-1 focus:ring-[#8b151b]/20 outline-none text-slate-900 placeholder:text-slate-400 transition-colors"
+              className="w-full pl-8.5 pr-4 py-1.5 text-xs rounded-md border border-slate-300 bg-slate-50 focus:bg-white focus:border-[#8b151b] focus:ring-1 focus:ring-[#8b151b] outline-none text-slate-900 placeholder:text-slate-400 transition-colors"
             />
           </div>
 
           <button
             type="button"
             onClick={handleResetFilters}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-200 transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 border border-slate-300 transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3 h-3 text-slate-400" />
             <span>Reset Filters</span>
@@ -351,10 +351,10 @@ export const TendersView: React.FC = () => {
         </div>
 
         {/* 7-Column Filters Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1 border-t border-slate-100 text-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1 border-t border-slate-200 text-xs">
           {/* 1. Year */}
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Year
             </label>
             <select
@@ -363,7 +363,7 @@ export const TendersView: React.FC = () => {
                 setFiscalYear(e.target.value);
                 setPage(1);
               }}
-              className="w-full p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none text-xs"
+              className="w-full p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none text-xs"
             >
               <option value="ALL">All Years</option>
               {uniqueYears.map((y) => (
@@ -376,7 +376,7 @@ export const TendersView: React.FC = () => {
 
           {/* 2. Status */}
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Status
             </label>
             <select
@@ -385,7 +385,7 @@ export const TendersView: React.FC = () => {
                 setSelectedStatuses(e.target.value === 'ALL' ? [] : [e.target.value as TenderStatus]);
                 setPage(1);
               }}
-              className="w-full p-1.5 rounded-lg border border-slate-200 bg-white font-medium text-slate-700 outline-none text-xs"
+              className="w-full p-1.5 rounded-md border border-slate-300 bg-white font-medium text-slate-700 outline-none text-xs"
             >
               <option value="ALL">All Statuses</option>
               <option value="SUBMITTED">Submitted</option>
@@ -400,7 +400,7 @@ export const TendersView: React.FC = () => {
 
           {/* 3. Source */}
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Source
             </label>
             <select
@@ -409,7 +409,7 @@ export const TendersView: React.FC = () => {
                 setSelectedSources(e.target.value === 'ALL' ? [] : [e.target.value]);
                 setPage(1);
               }}
-              className="w-full p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none text-xs"
+              className="w-full p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none text-xs"
             >
               <option value="ALL">All Sources</option>
               {sources.map((s) => (
@@ -421,9 +421,9 @@ export const TendersView: React.FC = () => {
           </div>
 
           {/* 4. Owner */}
-          {currentUser.role !== 'USER' && (
+          {hasFullAccess(currentUser) && (
             <div>
-              <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+              <label className="block text-[11px] font-medium text-slate-400 mb-1">
                 Owner
               </label>
               <select
@@ -432,7 +432,7 @@ export const TendersView: React.FC = () => {
                   setSelectedOwners(e.target.value === 'ALL' ? [] : [e.target.value]);
                   setPage(1);
                 }}
-                className="w-full p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none text-xs"
+                className="w-full p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none text-xs"
               >
                 <option value="ALL">All Owners</option>
                 {allUsers.map((u) => (
@@ -446,7 +446,7 @@ export const TendersView: React.FC = () => {
 
           {/* 5. Location */}
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Location
             </label>
             <select
@@ -455,7 +455,7 @@ export const TendersView: React.FC = () => {
                 setSelectedLocation(e.target.value);
                 setPage(1);
               }}
-              className="w-full p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none text-xs"
+              className="w-full p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none text-xs"
             >
               <option value="ALL">All Locations</option>
               {uniqueLocations.map((loc) => (
@@ -468,7 +468,7 @@ export const TendersView: React.FC = () => {
 
           {/* 6. Consultant */}
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Consultant
             </label>
             <select
@@ -477,7 +477,7 @@ export const TendersView: React.FC = () => {
                 setSelectedConsultant(e.target.value);
                 setPage(1);
               }}
-              className="w-full p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none text-xs"
+              className="w-full p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none text-xs"
             >
               <option value="ALL">All Consultants</option>
               {consultants.map((c) => (
@@ -490,7 +490,7 @@ export const TendersView: React.FC = () => {
 
           {/* 7. Value Range */}
           <div>
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1">
+            <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Value Band
             </label>
             <select
@@ -499,7 +499,7 @@ export const TendersView: React.FC = () => {
                 setValueRange(e.target.value);
                 setPage(1);
               }}
-              className="w-full p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none text-xs"
+              className="w-full p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none text-xs"
             >
               <option value="ALL">All Values</option>
               <option value="UNDER_1M">&lt; AED 1.0M</option>
@@ -513,7 +513,7 @@ export const TendersView: React.FC = () => {
 
       {/* Bulk Action Strip for Admins */}
       {selectedIds.length > 0 && can(currentUser, 'reassign_owner') && (
-        <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center justify-between gap-4 text-xs">
+        <div className="bg-slate-50 p-3 rounded-md border border-slate-300 flex items-center justify-between gap-4 text-xs">
           <div className="flex items-center gap-2 font-medium text-slate-900">
             <span>{selectedIds.length} tender(s) selected</span>
           </div>
@@ -522,7 +522,7 @@ export const TendersView: React.FC = () => {
             <select
               value={bulkOwnerId}
               onChange={(e) => setBulkOwnerId(e.target.value)}
-              className="p-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 outline-none"
+              className="p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none"
             >
               <option value="">Select New Owner...</option>
               {allUsers.map((u) => (
@@ -535,7 +535,7 @@ export const TendersView: React.FC = () => {
               type="button"
               onClick={handleBulkReassign}
               disabled={!bulkOwnerId}
-              className="px-3 py-1.5 bg-[#8b151b] hover:bg-[#731217] text-white rounded-lg font-medium disabled:opacity-40 transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-[#8b151b] hover:bg-[#731217] text-white rounded-md font-medium disabled:opacity-40 transition-colors cursor-pointer"
             >
               Reassign Owner
             </button>
@@ -551,11 +551,11 @@ export const TendersView: React.FC = () => {
       )}
 
       {/* Table Container */}
-      <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_2px_rgba(0,0,0,0.02)] overflow-hidden">
+      <div className="bg-white rounded-md border border-slate-300 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-200/80 bg-slate-50/75 uppercase font-semibold text-[10.5px] text-slate-400 tracking-wider">
+              <tr className="border-b border-slate-300 bg-slate-50 uppercase font-semibold text-[10.5px] text-slate-400 tracking-wider">
                 <th className="p-2.5 w-10 text-center">
                   <input
                     type="checkbox"
@@ -605,7 +605,7 @@ export const TendersView: React.FC = () => {
                 <th className="p-2.5 whitespace-nowrap">Next Follow-up</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-900">
+            <tbody className="divide-y divide-slate-200 text-slate-900">
               {paginatedTenders.length === 0 ? (
                 <tr>
                   <td colSpan={13} className="p-12 text-center text-slate-400">
@@ -624,7 +624,7 @@ export const TendersView: React.FC = () => {
                   return (
                     <tr
                       key={tender.id}
-                      className={`hover:bg-slate-50/70 transition-colors cursor-pointer ${
+                      className={`hover:bg-slate-50 transition-colors cursor-pointer ${
                         isSelected ? 'bg-slate-50' : ''
                       }`}
                       onClick={(e) => {
@@ -661,7 +661,7 @@ export const TendersView: React.FC = () => {
                       {/* Project No / Award */}
                       <td className="p-2.5 whitespace-nowrap">
                         {tender.award?.projectNumber ? (
-                          <span className="font-mono font-medium text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                          <span className="font-mono font-medium text-[11px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-300">
                             PJ/{tender.award.projectNumber}
                           </span>
                         ) : (
@@ -756,7 +756,7 @@ export const TendersView: React.FC = () => {
         </div>
 
         {/* Pagination footer */}
-        <div className="p-3 bg-slate-50/80 border-t border-slate-200/80 flex items-center justify-between text-xs text-slate-600">
+        <div className="p-3 bg-slate-50 border-t border-slate-300 flex items-center justify-between text-xs text-slate-600">
           <div>
             Showing {(page - 1) * pageSize + 1}–
             {Math.min(page * pageSize, filteredTenders.length)} of {filteredTenders.length} entries
@@ -767,7 +767,7 @@ export const TendersView: React.FC = () => {
               type="button"
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="p-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+              className="p-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-3.5 h-3.5 text-slate-600" />
             </button>
@@ -778,7 +778,7 @@ export const TendersView: React.FC = () => {
               type="button"
               disabled={page >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="p-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+              className="p-1 rounded-md border border-slate-300 bg-white hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
             >
               <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
             </button>

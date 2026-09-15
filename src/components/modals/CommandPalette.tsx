@@ -2,11 +2,21 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, FileSpreadsheet, Trophy, CalendarClock, PlusCircle, ArrowRight, X } from 'lucide-react';
+import {
+  Search,
+  FileSpreadsheet,
+  Trophy,
+  CalendarClock,
+  PlusCircle,
+  ArrowRight,
+  ShieldAlert,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
 import { formatAED } from '../../lib/money';
 import { StatusBadge } from '../ui/StatusBadge';
+import { can } from '../../lib/permissions';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -58,13 +68,23 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     { label: 'View Tenders Pipeline', path: '/tenders', icon: FileSpreadsheet, isPrimary: false },
     { label: 'View Awarded Projects', path: '/awarded', icon: Trophy, isPrimary: false },
     { label: 'Follow-ups Worklist', path: '/followups', icon: CalendarClock, isPrimary: false },
+    ...(can(currentUser, 'monitor_department')
+      ? [
+          {
+            label: 'Management & Admin Monitoring',
+            path: '/monitoring',
+            icon: ShieldAlert,
+            isPrimary: false,
+          },
+        ]
+      : []),
   ].filter((a) => !q || a.label.toLowerCase().includes(q));
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in-50 duration-100">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 max-w-xl w-full overflow-hidden">
+      <div className="bg-white rounded-md shadow-2xl border border-slate-300 max-w-xl w-full overflow-hidden">
         {/* Search Input */}
-        <div className="p-3.5 border-b border-slate-100 flex items-center gap-3 bg-white">
+        <div className="p-3.5 border-b border-slate-200 flex items-center gap-3 bg-white">
           <Search className="w-4 h-4 text-slate-400" />
           <input
             ref={inputRef}
@@ -84,11 +104,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         </div>
 
         {/* Results */}
-        <div className="max-h-96 overflow-y-auto p-2 divide-y divide-slate-100">
+        <div className="max-h-96 overflow-y-auto p-2 divide-y divide-slate-200">
           {/* Quick Actions */}
           {quickActions.length > 0 && (
             <div className="py-1.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-3 mb-1">
+              <div className="text-[11px] font-medium text-slate-400 px-3 mb-1">
                 Quick Navigation
               </div>
               <div className="space-y-0.5">
@@ -102,9 +122,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                         router.push(act.path);
                         onClose();
                       }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
                         act.isPrimary
-                          ? 'text-[#8b151b] hover:bg-[#8b151b]/8 font-semibold'
+                          ? 'text-[#8b151b] hover:bg-red-50 font-semibold'
                           : 'text-slate-700 hover:bg-slate-50 hover:text-slate-900 font-medium'
                       }`}
                     >
@@ -122,7 +142,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
 
           {/* Tenders matches */}
           <div className="py-1.5">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-3 mb-1">
+            <div className="text-[11px] font-medium text-slate-400 px-3 mb-1">
               Tenders {q ? `(${filteredTenders.length} matches)` : '(Recent)'}
             </div>
             {filteredTenders.length === 0 ? (
@@ -138,7 +158,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                       router.push(`/tenders/${t.id}`);
                       onClose();
                     }}
-                    className="p-2.5 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors flex items-center justify-between"
+                    className="p-2.5 rounded-md hover:bg-slate-50 cursor-pointer transition-colors flex items-center justify-between"
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -146,7 +166,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                           #{t.tenderNumber}
                         </span>
                         {t.award?.projectNumber && (
-                          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-200/60">
+                          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-300">
                             PJ/{t.award.projectNumber}
                           </span>
                         )}
@@ -168,7 +188,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
           </div>
         </div>
 
-        <div className="p-2.5 bg-slate-50 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between px-4">
+        <div className="p-2.5 bg-slate-50 border-t border-slate-200 text-[11px] text-slate-400 flex items-center justify-between px-4">
           <span>Navigate with click</span>
           <span className="font-mono text-[10px]">ESC to close</span>
         </div>

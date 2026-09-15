@@ -13,10 +13,13 @@ import {
   GitFork,
   Briefcase,
   PlusCircle,
+  ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
-import { can } from '../../lib/permissions';
+import { can, hasFullAccess } from '../../lib/permissions';
+import { ACTIVE_STATUSES, isPastFollowUpWindow } from '../../lib/followUpPolicy';
+import { ROLE_LABELS, ROLE_SCOPE_NOTE } from '../../types';
 
 export const AppSidebar: React.FC = () => {
   const router = useRouter();
@@ -25,17 +28,15 @@ export const AppSidebar: React.FC = () => {
 
   // Get live counts scoped for currentUser
   const tenders = tenderRepository.getTenders(currentUser);
-  const activeCount = tenders.filter((t) =>
-    ['SUBMITTED', 'UNDER_REVIEW', 'ON_HOLD'].includes(t.status)
-  ).length;
+  const activeCount = tenders.filter((t) => ACTIVE_STATUSES.includes(t.status)).length;
 
   const now = new Date();
   const overdueFollowUps = tenders.filter(
-    (t) =>
-      ['SUBMITTED', 'UNDER_REVIEW', 'ON_HOLD'].includes(t.status) &&
-      t.nextFollowUpAt &&
-      new Date(t.nextFollowUpAt) < now
+    (t) => ACTIVE_STATUSES.includes(t.status) && t.nextFollowUpAt && new Date(t.nextFollowUpAt) < now
   ).length;
+
+  // Tenders past the mandatory 2-month window with no clear status yet.
+  const pastDeadline = tenders.filter((t) => isPastFollowUpWindow(t, now)).length;
 
   const awardedCount = tenders.filter((t) => t.status === 'AWARDED').length;
 
@@ -51,21 +52,21 @@ export const AppSidebar: React.FC = () => {
       label: 'Tenders Pipeline',
       icon: FileSpreadsheet,
       badge: activeCount,
-      badgeColor: 'bg-slate-100 text-slate-700',
+      badgeColor: 'bg-[#5e0d12] text-white',
     },
     {
       id: '/awarded',
       label: 'Awarded Projects',
       icon: Trophy,
       badge: awardedCount > 0 ? awardedCount : null,
-      badgeColor: 'bg-emerald-50 text-emerald-700 border border-emerald-200/60',
+      badgeColor: 'bg-emerald-600 text-white',
     },
     {
       id: '/followups',
       label: 'Follow-ups Worklist',
       icon: CalendarClock,
       badge: overdueFollowUps > 0 ? `${overdueFollowUps} due` : null,
-      badgeColor: 'bg-rose-50 text-rose-700 border border-rose-200/60 font-medium',
+      badgeColor: 'bg-amber-400 text-[#3f2d00] font-bold',
     },
     {
       id: '/reports',
@@ -74,6 +75,19 @@ export const AppSidebar: React.FC = () => {
       badge: null,
     },
   ];
+
+  // Manager / Admin 1 / Admin 2 monitoring board.
+  const monitorNav = {
+    id: '/monitoring',
+    label: 'Monitoring Board',
+    icon: ShieldAlert,
+    badge: pastDeadline > 0 ? `${pastDeadline} past 2m` : null,
+    badgeColor: 'bg-[#141414] text-white font-bold',
+  };
+
+  if (can(currentUser, 'monitor_department')) {
+    mainNav.splice(4, 0, monitorNav);
+  }
 
   const adminNav = [
     {
@@ -98,26 +112,26 @@ export const AppSidebar: React.FC = () => {
     },
   ];
 
-  const isSuperAdminOrAdmin = can(currentUser, 'manage_admin');
+  const showAdminSection = can(currentUser, 'manage_admin');
 
   return (
-    <aside className="w-60 shrink-0 bg-white border-r border-slate-200/80 min-h-[calc(100vh-60px)] p-3.5 flex flex-col justify-between select-none">
+    <aside className="w-60 shrink-0 bg-[#8b151b] border-r border-[#5e0d12] min-h-[calc(100vh-60px)] p-3.5 flex flex-col justify-between select-none">
       <div className="space-y-6">
         {/* Quick Action: New Tender */}
         {can(currentUser, 'create_tender') && (
           <button
             type="button"
             onClick={() => router.push('/tenders/new')}
-            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] shadow-xs hover:shadow-sm transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold text-[#8b151b] bg-white hover:bg-[#f7e7e8] transition-all cursor-pointer"
           >
-            <PlusCircle className="w-3.5 h-3.5 text-red-200" />
+            <PlusCircle className="w-3.5 h-3.5 text-[#8b151b]" />
             <span>New Tender Bid</span>
           </button>
         )}
 
         {/* Main Section */}
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-3 mb-1.5">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-[#e3a9ad] px-3 mb-1.5">
             Operations
           </div>
           <nav className="space-y-0.5">
@@ -131,16 +145,16 @@ export const AppSidebar: React.FC = () => {
                   key={item.id}
                   type="button"
                   onClick={() => router.push(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
                     active
-                      ? 'bg-[#8b151b]/8 text-[#8b151b] font-semibold border-r-2 border-[#8b151b]'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium border-r-2 border-transparent'
+                      ? 'bg-white text-[#8b151b] font-semibold border-r-2 border-white'
+                      : 'text-[#f3d3d5] hover:text-white hover:bg-[#731217] font-medium border-r-2 border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <Icon
                       className={`w-4 h-4 ${
-                        active ? 'text-[#8b151b]' : 'text-slate-400'
+                        active ? 'text-[#8b151b]' : 'text-[#e3a9ad]'
                       }`}
                     />
                     <span>{item.label}</span>
@@ -159,9 +173,9 @@ export const AppSidebar: React.FC = () => {
         </div>
 
         {/* Admin & System Section */}
-        {isSuperAdminOrAdmin && (
+        {showAdminSection && (
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-3 mb-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#e3a9ad] px-3 mb-1.5">
               Administration
             </div>
             <nav className="space-y-0.5">
@@ -173,16 +187,16 @@ export const AppSidebar: React.FC = () => {
                     key={item.id}
                     type="button"
                     onClick={() => router.push(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
                       active
-                        ? 'bg-[#8b151b]/8 text-[#8b151b] font-semibold border-r-2 border-[#8b151b]'
-                        : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50 font-medium border-r-2 border-transparent'
+                        ? 'bg-white text-[#8b151b] font-semibold border-r-2 border-white'
+                        : 'text-[#f3d3d5] hover:text-white hover:bg-[#731217] font-medium border-r-2 border-transparent'
                     }`}
                   >
                     <div className="flex items-center gap-2.5">
                       <Icon
                         className={`w-4 h-4 ${
-                          active ? 'text-[#8b151b]' : 'text-slate-400'
+                          active ? 'text-[#8b151b]' : 'text-[#e3a9ad]'
                         }`}
                       />
                       <span>{item.label}</span>
@@ -195,18 +209,16 @@ export const AppSidebar: React.FC = () => {
         )}
       </div>
 
-      {/* Scope Status Box at bottom */}
-      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs">
-        <div className="flex items-center justify-between text-[11px] font-medium text-slate-700">
-          <span>Territory Scope</span>
-          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
-            {currentUser.region}
+      {/* Role & scope box at bottom */}
+      <div className="p-3 bg-[#731217] rounded-md border border-[#a4262c] text-xs">
+        <div className="flex items-center justify-between text-[11px] font-semibold text-white">
+          <span>{ROLE_LABELS[currentUser.role]}</span>
+          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#5e0d12] border border-[#a4262c] text-white">
+            {currentUser.region === 'ALL' ? 'ALL UAE' : currentUser.region}
           </span>
         </div>
-        <div className="mt-1 text-[10.5px] text-slate-400 leading-snug">
-          {currentUser.role === 'USER'
-            ? 'Restricted to owned and sourced tenders.'
-            : 'UAE enterprise directory access enabled.'}
+        <div className="mt-1 text-[10.5px] text-[#e3a9ad] leading-snug">
+          {ROLE_SCOPE_NOTE[currentUser.role]}
         </div>
       </div>
     </aside>

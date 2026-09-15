@@ -1,4 +1,40 @@
-export type Role = 'SUPER_ADMIN' | 'ADMIN' | 'MANAGER' | 'USER' | 'VIEWER';
+/**
+ * Tendering Department roles.
+ * MANAGER      - Engr. Hassan. Full access: view, monitor, assign and follow up on every tender.
+ * ADMIN_1      - Syed Shahzaib. Everything the Manager can do, plus people/role administration.
+ * ADMIN_2      - Haseeb. Full tender + follow-up administration (no people/role administration).
+ * SALESPERSON  - Source owners (Hassan, Bilal, Yaqub, Waseem, Hamad). Own assigned tenders only.
+ * DUBAI_VILLAS - Engr. Zeeshan. Dubai villa tenders only.
+ */
+export type Role = 'MANAGER' | 'ADMIN_1' | 'ADMIN_2' | 'SALESPERSON' | 'DUBAI_VILLAS';
+
+/** Roles that monitor the whole department. */
+export const FULL_ACCESS_ROLES: Role[] = ['MANAGER', 'ADMIN_1', 'ADMIN_2'];
+
+export const ROLE_LABELS: Record<Role, string> = {
+  MANAGER: 'Manager',
+  ADMIN_1: 'Admin 1',
+  ADMIN_2: 'Admin 2',
+  SALESPERSON: 'Source / Salesperson',
+  DUBAI_VILLAS: 'Dubai Villas Only',
+};
+
+/** Short note shown in the sidebar under the signed-in person's role. */
+export const ROLE_SCOPE_NOTE: Record<Role, string> = {
+  MANAGER: 'Full access across the Tendering Department.',
+  ADMIN_1: 'Full access, plus people, roles and permissions.',
+  ADMIN_2: 'Full tender and follow-up administration.',
+  SALESPERSON: 'Restricted to your own assigned and sourced tenders.',
+  DUBAI_VILLAS: 'Restricted to Dubai villa tenders and projects.',
+};
+
+export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  MANAGER: 'Full access. View, monitor, assign and follow up on all tenders; manage people and roles.',
+  ADMIN_1: 'Full access plus people, roles and permissions. Overall tendering administration.',
+  ADMIN_2: 'Full tender administration: details, target dates, status and follow-up records.',
+  SALESPERSON: 'Own assigned tenders and follow-ups only. Must follow up continuously.',
+  DUBAI_VILLAS: 'Dubai villa tenders and follow-ups only.',
+};
 export type TenderStatus = 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'AWARDED' | 'REJECTED' | 'CANCELLED' | 'ON_HOLD';
 export type Region = 'ABU_DHABI' | 'DUBAI' | 'OTHER';
 export type SourceKind = 'PERSON' | 'EMAIL' | 'WHATSAPP' | 'CONSULTANT' | 'WALK_IN' | 'INTERNAL_SALES' | 'BROKER' | 'CLIENT_DIRECT' | 'MANAGEMENT' | 'EXHIBITION' | 'OTHER';
@@ -18,6 +54,12 @@ export interface User {
   email: string;
   name: string;
   role: Role;
+  /**
+   * Sign-in credential. This app has no server, so it is checked in the
+   * browser against the local store: it gates the UI, it is not a security
+   * boundary. Swap tenderRepository.signIn for a real API call to make it one.
+   */
+  password?: string;
   phone?: string | null;
   isActive: boolean;
   region: Region | 'ALL';

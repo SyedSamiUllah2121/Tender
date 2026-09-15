@@ -19,6 +19,8 @@ import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { normalizeStatus, normalizeLocation } from '../lib/normalize';
 import { toFils, formatAED } from '../lib/money';
 import { DuplicateStrategy } from '../types';
+import { can } from '../lib/permissions';
+import { AccessDenied } from '../components/ui/AccessDenied';
 
 interface ParsedRow {
   index: number;
@@ -204,6 +206,10 @@ export const AdminImportView: React.FC = () => {
     }
   };
 
+  if (!can(currentUser, 'import_excel')) {
+    return <AccessDenied requirement="Only the Manager, Admin 1 and Admin 2 can migrate Excel data." />;
+  }
+
   const validCount = parsedRows.filter((r) => r.errors.length === 0).length;
   const errorCount = parsedRows.filter((r) => r.errors.length > 0).length;
   const warningCount = parsedRows.filter((r) => r.warnings.length > 0).length;
@@ -212,17 +218,17 @@ export const AdminImportView: React.FC = () => {
     <div className="space-y-6 pb-20 max-w-5xl mx-auto">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+        <h1 className="text-base font-semibold text-slate-900">
           Excel Data Import & Historical Migration
         </h1>
         <p className="text-xs text-slate-500">
-          Batch ingest master spreadsheet sheets (2024, 2025, 2026) with automatic header normalization and duplicate detection
+          Import tenders from the master spreadsheet. Headers are matched and duplicates flagged before anything is written.
         </p>
       </div>
 
       {/* STEP 1: Upload */}
       {step === 'upload' && (
-        <div className="bg-white p-8 rounded-2xl border border-slate-200/80 shadow-xs text-center space-y-4">
+        <div className="bg-white p-8 rounded-md border border-slate-300 text-center space-y-4">
           <div className="w-16 h-16 rounded-full bg-rose-50 text-[#8b151b] flex items-center justify-center mx-auto">
             <UploadCloud className="w-8 h-8" />
           </div>
@@ -236,7 +242,7 @@ export const AdminImportView: React.FC = () => {
             </p>
           </div>
 
-          <label className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-xs text-white bg-[#8b151b] hover:bg-[#731217] cursor-pointer shadow-sm hover:shadow-md transition-all">
+          <label className="inline-flex items-center gap-2 px-6 py-2.5 rounded-md font-bold text-xs text-white bg-[#8b151b] hover:bg-[#731217] cursor-pointer transition-all">
             <FileSpreadsheet className="w-4 h-4 text-red-200" />
             <span>Select Excel File to Validate</span>
             <input
@@ -247,8 +253,8 @@ export const AdminImportView: React.FC = () => {
             />
           </label>
 
-          <div className="pt-4 border-t border-gray-100 max-w-lg mx-auto text-left">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+          <div className="pt-4 border-t border-slate-200 max-w-lg mx-auto text-left">
+            <div className="text-[11px] font-medium text-gray-400 mb-2">
               Recognized Legacy Headers:
             </div>
             <div className="flex flex-wrap gap-1.5 text-[11px] font-mono text-gray-600">
@@ -271,36 +277,36 @@ export const AdminImportView: React.FC = () => {
         <div className="space-y-4">
           {/* Validation Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="bg-white p-4 rounded-xl border border-emerald-200 shadow-xs flex items-center gap-3">
+            <div className="bg-white p-4 rounded-md border border-emerald-300 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
                 <CheckCircle2 className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-xl font-black text-emerald-900 font-mono">
+                <div className="text-xl font-semibold text-emerald-900 font-mono">
                   {validCount}
                 </div>
                 <div className="text-[11px] font-bold text-emerald-700">Valid Rows Ready</div>
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-xs flex items-center gap-3">
+            <div className="bg-white p-4 rounded-md border border-amber-300 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold">
                 <AlertTriangle className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-xl font-black text-amber-900 font-mono">
+                <div className="text-xl font-semibold text-amber-900 font-mono">
                   {warningCount}
                 </div>
                 <div className="text-[11px] font-bold text-amber-700">Rows with Warnings</div>
               </div>
             </div>
 
-            <div className="bg-white p-4 rounded-xl border border-red-200 shadow-xs flex items-center gap-3">
+            <div className="bg-white p-4 rounded-md border border-red-300 flex items-center gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold">
                 <XCircle className="w-5 h-5" />
               </div>
               <div>
-                <div className="text-xl font-black text-red-900 font-mono">
+                <div className="text-xl font-semibold text-red-900 font-mono">
                   {errorCount}
                 </div>
                 <div className="text-[11px] font-bold text-red-700">Errors (Will be skipped)</div>
@@ -309,12 +315,12 @@ export const AdminImportView: React.FC = () => {
           </div>
 
           {/* Duplicate Strategy Radio */}
-          <div className="bg-white p-4 rounded-xl border border-[var(--border)] shadow-xs space-y-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-[var(--text-500)]">
+          <div className="bg-white p-4 rounded-md border border-[var(--border)] space-y-2">
+            <div className="text-xs font-semibold text-slate-700">
               Duplicate Tender Number Resolution Policy
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-              <label className="flex items-start gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/50 cursor-pointer hover:bg-white">
+              <label className="flex items-start gap-2 p-3 rounded-md border border-slate-300 bg-gray-50 cursor-pointer hover:bg-white">
                 <input
                   type="radio"
                   name="strategy"
@@ -331,7 +337,7 @@ export const AdminImportView: React.FC = () => {
                 </div>
               </label>
 
-              <label className="flex items-start gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/50 cursor-pointer hover:bg-white">
+              <label className="flex items-start gap-2 p-3 rounded-md border border-slate-300 bg-gray-50 cursor-pointer hover:bg-white">
                 <input
                   type="radio"
                   name="strategy"
@@ -348,7 +354,7 @@ export const AdminImportView: React.FC = () => {
                 </div>
               </label>
 
-              <label className="flex items-start gap-2 p-3 rounded-lg border border-gray-200 bg-gray-50/50 cursor-pointer hover:bg-white">
+              <label className="flex items-start gap-2 p-3 rounded-md border border-slate-300 bg-gray-50 cursor-pointer hover:bg-white">
                 <input
                   type="radio"
                   name="strategy"
@@ -368,8 +374,8 @@ export const AdminImportView: React.FC = () => {
           </div>
 
           {/* Parsed Rows Sample Table */}
-          <div className="bg-white rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
-            <div className="p-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs">
+          <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
+            <div className="p-3 bg-gray-50 border-b border-slate-300 flex items-center justify-between text-xs">
               <span className="font-bold text-gray-700">
                 Dry-run Preview: {parsedRows.length} Rows from "{fileName}"
               </span>
@@ -379,7 +385,7 @@ export const AdminImportView: React.FC = () => {
             <div className="overflow-x-auto max-h-96">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-gray-50 text-[10px] uppercase font-bold text-gray-500 sticky top-0">
-                  <tr className="border-b border-gray-200">
+                  <tr className="border-b border-slate-300">
                     <th className="p-2">Row</th>
                     <th className="p-2">Validation</th>
                     <th className="p-2">Tender #</th>
@@ -392,14 +398,14 @@ export const AdminImportView: React.FC = () => {
                     <th className="p-2">Source</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-slate-200">
                   {parsedRows.slice(0, 20).map((r) => {
                     const hasErr = r.errors.length > 0;
                     const hasWarn = r.warnings.length > 0;
                     return (
                       <tr
                         key={r.index}
-                        className={hasErr ? 'bg-red-50/50' : hasWarn ? 'bg-amber-50/30' : ''}
+                        className={hasErr ? 'bg-red-50' : hasWarn ? 'bg-amber-50' : ''}
                       >
                         <td className="p-2 font-mono text-gray-400">{r.index}</td>
                         <td className="p-2 whitespace-nowrap">
@@ -449,7 +455,7 @@ export const AdminImportView: React.FC = () => {
                 setStep('upload');
                 setParsedRows([]);
               }}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 hover:bg-gray-100 flex items-center gap-1.5 cursor-pointer"
+              className="px-4 py-2 rounded-md text-xs font-semibold text-gray-600 hover:bg-gray-100 flex items-center gap-1.5 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Cancel & Re-upload</span>
@@ -459,7 +465,7 @@ export const AdminImportView: React.FC = () => {
               type="button"
               onClick={handleCommit}
               disabled={importing || validCount === 0}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold text-white bg-[#8b151b] hover:bg-[#731217] shadow-sm hover:shadow-md flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all"
+              className="px-6 py-2.5 rounded-md text-xs font-bold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-2 cursor-pointer disabled:opacity-50 transition-all"
             >
               <span>{importing ? 'Processing Batch Ingest...' : `Commit Ingest of ${validCount} Tenders`}</span>
               <ArrowRight className="w-4 h-4" />
@@ -470,33 +476,33 @@ export const AdminImportView: React.FC = () => {
 
       {/* STEP 3: Completed */}
       {step === 'completed' && importResult && (
-        <div className="bg-white p-8 rounded-2xl border border-emerald-200 shadow-md text-center space-y-4">
+        <div className="bg-white p-8 rounded-md border border-emerald-300 shadow-md text-center space-y-4">
           <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
 
           <div>
-            <h2 className="text-lg font-black text-gray-900">Import Batch Successfully Ingested</h2>
+            <h2 className="text-lg font-semibold text-gray-900">Import Batch Successfully Ingested</h2>
             <p className="text-xs text-gray-600 mt-1">
               All parsed entries have been normalized, audit-logged, and merged into the live repository.
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 max-w-md mx-auto p-4 bg-gray-50 rounded-xl border border-gray-100 text-xs">
+          <div className="grid grid-cols-3 gap-3 max-w-md mx-auto p-4 bg-gray-50 rounded-md border border-slate-200 text-xs">
             <div>
-              <div className="text-lg font-black text-emerald-800 font-mono">
+              <div className="text-lg font-semibold text-emerald-800 font-mono">
                 {importResult.created}
               </div>
               <div className="text-[11px] font-bold text-gray-500">New Created</div>
             </div>
             <div>
-              <div className="text-lg font-black text-blue-800 font-mono">
+              <div className="text-lg font-semibold text-blue-800 font-mono">
                 {importResult.updated}
               </div>
               <div className="text-[11px] font-bold text-gray-500">Updated</div>
             </div>
             <div>
-              <div className="text-lg font-black text-amber-800 font-mono">
+              <div className="text-lg font-semibold text-amber-800 font-mono">
                 {importResult.skipped}
               </div>
               <div className="text-[11px] font-bold text-gray-500">Duplicates Skipped</div>
@@ -510,7 +516,7 @@ export const AdminImportView: React.FC = () => {
                 setStep('upload');
                 setParsedRows([]);
               }}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer shadow-sm"
+              className="px-5 py-2.5 rounded-md text-xs font-bold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer"
             >
               Upload Another Spreadsheet
             </button>

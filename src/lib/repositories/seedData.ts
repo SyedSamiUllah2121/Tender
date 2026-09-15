@@ -11,78 +11,114 @@ import {
   TenderStatus,
 } from '../../types';
 import { toFils } from '../money';
+
+/** Starting password for every seeded account; changed per person in the app. */
+export const DEFAULT_PASSWORD = '123';
+
+/** Passwords from earlier builds, reset to the current default on load. */
+export const SUPERSEDED_PASSWORDS = ['inspire@2026'];
+
+/**
+ * Types straight into the sign-in form as a shortcut for the Manager account.
+ * Convenience for development only - remove it before this is used for real.
+ */
+export const SHORTCUT_LOGIN = '123';
+export const SHORTCUT_USER_ID = 'u_hassan';
 import { CANONICAL_SOURCES } from '../normalize';
 
 export const SEED_USERS: User[] = [
+  // 1. Manager - full / all access to the Tendering Department
   {
     id: 'u_hassan',
     email: 'hassan@inspire.ae',
-    name: 'Mr. Hassan',
-    role: 'SUPER_ADMIN',
+    name: 'Engr. Hassan',
+    role: 'MANAGER',
     phone: '+971501112233',
     isActive: true,
-    region: 'ABU_DHABI',
+    password: DEFAULT_PASSWORD,
+    region: 'ALL',
     createdAt: '2024-01-01T08:00:00Z',
   },
+  // 2. Admin 1 - full access + people, roles and permissions
+  {
+    id: 'u_shahzaib',
+    email: 'shahzaib@inspire.ae',
+    name: 'Syed Shahzaib',
+    role: 'ADMIN_1',
+    phone: '+971503334455',
+    isActive: true,
+    password: DEFAULT_PASSWORD,
+    region: 'ALL',
+    createdAt: '2024-01-01T08:00:00Z',
+  },
+  // 3. Admin 2 - tender administration and follow-up records
+  {
+    id: 'u_haseeb',
+    email: 'haseeb@inspire.ae',
+    name: 'Haseeb',
+    role: 'ADMIN_2',
+    phone: '+971508889900',
+    isActive: true,
+    password: DEFAULT_PASSWORD,
+    region: 'ALL',
+    createdAt: '2024-01-01T08:00:00Z',
+  },
+  // 4. Sources - own assigned tenders and follow-ups only
   {
     id: 'u_bilal',
     email: 'bilal@inspire.ae',
     name: 'Engr. Bilal',
-    role: 'USER',
+    role: 'SALESPERSON',
     phone: '+971502223344',
     isActive: true,
+    password: DEFAULT_PASSWORD,
     region: 'ABU_DHABI',
     createdAt: '2024-01-05T08:00:00Z',
   },
   {
-    id: 'u_shahzaib',
-    email: 'shahzaib@inspire.ae',
-    name: 'Engr. Shahzaib',
-    role: 'USER',
-    phone: '+971503334455',
-    isActive: true,
-    region: 'ABU_DHABI',
-    createdAt: '2024-01-10T08:00:00Z',
-  },
-  {
-    id: 'u_waqas',
-    email: 'waqas@inspire.ae',
-    name: 'Waqas',
-    role: 'USER',
-    phone: '+971504445566',
-    isActive: true,
-    region: 'ABU_DHABI',
-    createdAt: '2024-01-15T08:00:00Z',
-  },
-  {
     id: 'u_yaqoob',
     email: 'yaqoob@inspire.ae',
-    name: 'Yaqoob',
-    role: 'USER',
+    name: 'Sir Yaqub',
+    role: 'SALESPERSON',
     phone: '+971505556677',
     isActive: true,
+    password: DEFAULT_PASSWORD,
     region: 'ABU_DHABI',
     createdAt: '2024-01-15T08:00:00Z',
   },
+  {
+    id: 'u_waseem',
+    email: 'waseem@inspire.ae',
+    name: 'Engr. Waseem',
+    role: 'SALESPERSON',
+    phone: '+971504445566',
+    isActive: true,
+    password: DEFAULT_PASSWORD,
+    region: 'ABU_DHABI',
+    createdAt: '2024-01-15T08:00:00Z',
+  },
+  {
+    id: 'u_hamad',
+    email: 'hamad@inspire.ae',
+    name: 'Engr. Hamad',
+    role: 'SALESPERSON',
+    phone: '+971507778899',
+    isActive: true,
+    password: DEFAULT_PASSWORD,
+    region: 'ABU_DHABI',
+    createdAt: '2024-01-15T08:00:00Z',
+  },
+  // 5. Dubai Villas only
   {
     id: 'u_zeeshan',
     email: 'zeeshan@inspire.ae',
     name: 'Engr. Zeeshan',
-    role: 'USER',
+    role: 'DUBAI_VILLAS',
     phone: '+971506667788',
     isActive: true,
+    password: DEFAULT_PASSWORD,
     region: 'DUBAI',
     createdAt: '2024-01-20T08:00:00Z',
-  },
-  {
-    id: 'u_ihsan',
-    email: 'ihsan@inspire.ae',
-    name: 'Ihsan',
-    role: 'MANAGER',
-    phone: '+971507778899',
-    isActive: true,
-    region: 'ABU_DHABI',
-    createdAt: '2024-01-01T08:00:00Z',
   },
 ];
 
@@ -260,7 +296,7 @@ export function generateSeedTenders(): {
     'G+1 Residential Villa & Boundary Wall',
   ];
 
-  const salesUsers = SEED_USERS.filter((u) => u.role === 'USER');
+  const salesUsers = SEED_USERS.filter((u) => u.role === 'SALESPERSON');
   const now = new Date();
 
   // Helper to subtract days
@@ -499,7 +535,7 @@ export function generateSeedTenders(): {
     const client = SEED_CLIENTS[i % SEED_CLIENTS.length];
     const loc = locations[i % locations.length];
     const reg: 'ABU_DHABI' | 'DUBAI' = loc === 'Al Awir First' ? 'DUBAI' : 'ABU_DHABI';
-    const owner = reg === 'DUBAI' ? SEED_USERS.find((u) => u.region === 'DUBAI')! : salesUsers[i % salesUsers.length];
+    const owner = reg === 'DUBAI' ? SEED_USERS.find((u) => u.role === 'DUBAI_VILLAS')! : salesUsers[i % salesUsers.length];
     const consultant = SEED_CONSULTANTS[i % SEED_CONSULTANTS.length];
     const source = SEED_SOURCES[i % SEED_SOURCES.length];
 

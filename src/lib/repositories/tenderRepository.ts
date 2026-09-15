@@ -16,13 +16,26 @@ import {
   DuplicateStrategy,
 } from '../../types';
 import {
+  DEFAULT_PASSWORD,
+  SHORTCUT_LOGIN,
+  SHORTCUT_USER_ID,
+  SUPERSEDED_PASSWORDS,
   SEED_USERS,
   SEED_SOURCES,
   SEED_CONSULTANTS,
   SEED_CLIENTS,
   generateSeedTenders,
 } from './seedData';
-import { can, canAccessTender, scopeTenders } from '../permissions';
+import { can, canAccessTender, scopeTenders, hasFullAccess } from '../permissions';
+import {
+  ACTIVE_STATUSES,
+  buildMonitorRow,
+  clampToWindow,
+  defaultNextFollowUp,
+  deadlineState,
+  nextFollowUpFromSubmission,
+  MonitorRow,
+} from '../followUpPolicy';
 import { normalizeStatus, normalizeSourceName, normalizeLocation, parseExcelDate } from '../normalize';
 import { toFils } from '../money';
 
@@ -38,6 +51,64 @@ export interface StatusChangePayload {
   contractDate?: string | null;
   targetMonth?: string | null;
   handoverNotes?: string | null;
+}
+
+const STORAGE_KEY = 'inspire_db_v2';
+const LEGACY_STORAGE_KEY = 'inspire_db_v1';
+
+/**
+ * Roles used before the Tendering Department structure was adopted.
+ * Kept so existing browser data keeps working after the upgrade.
+ */
+const LEGACY_ROLE_MAP: Record<string, User['role']> = {
+  SUPER_ADMIN: 'ADMIN_1',
+  ADMIN: 'ADMIN_2',
+  MANAGER: 'MANAGER',
+  USER: 'SALESPERSON',
+  VIEWER: 'SALESPERSON',
+};
+
+function migrateUsers(saved: User[]): User[] {
+  const migrated = saved.map((u) => {
+    // A password left over from an earlier build becomes the current default.
+    if (u.password && SUPERSEDED_PASSWORDS.includes(u.password)) {
+      u = { ...u, password: DEFAULT_PASSWORD };
+    }
+    // The department roster is authoritative for the people it names; anyone
+    // else keeps their old role, mapped onto the new set.
+    const seed = SEED_USERS.find(
+      (s) => s.id === u.id || s.email.toLowerCase() === u.email.toLowerCase()
+    );
+    if (seed) {
+      return { ...u, name: seed.name, role: seed.role, region: seed.region };
+    }
+    return { ...u, role: LEGACY_ROLE_MAP[u.role as string] || u.role };
+  });
+
+  // Make sure everyone in the roster exists, even on older data.
+  for (const seed of SEED_USERS) {
+    if (!migrated.some((u) => u.id === seed.id || u.email.toLowerCase() === seed.email.toLowerCase())) {
+      migrated.push({ ...seed });
+    }
+  }
+  return migrated;
+}
+
+/**
+ * At least one active Manager or Admin 1 must remain, or nobody can administer
+ * people any more. `next` is the replacement record, or null when removing.
+ */
+function assertPeopleAdminRemains(userId: string, next: User | null): void {
+  const stillAdmin = (u: User) =>
+    !u.deletedAt && u.isActive && (u.role === 'ADMIN_1' || u.role === 'MANAGER');
+
+  const remaining = db.users.filter((u) => u.id !== userId).some(stillAdmin);
+  if (remaining) return;
+  if (next && stillAdmin(next)) return;
+
+  throw new Error(
+    'At least one active Manager or Admin 1 must remain to administer people and roles.'
+  );
 }
 
 class InMemoryDatabase {
@@ -63,10 +134,11 @@ class InMemoryDatabase {
     // Try loading from localStorage if in browser
     if (typeof window !== 'undefined') {
       try {
-        const saved = localStorage.getItem('inspire_db_v1');
+        const fromCurrent = localStorage.getItem(STORAGE_KEY);
+        const saved = fromCurrent || localStorage.getItem(LEGACY_STORAGE_KEY);
         if (saved) {
           const parsed = JSON.parse(saved);
-          this.users = parsed.users || [];
+          this.users = migrateUsers(parsed.users || []);
           this.sources = parsed.sources || [];
           this.consultants = parsed.consultants || [];
           this.clients = parsed.clients || [];
@@ -85,6 +157,9 @@ class InMemoryDatabase {
           this.activityLogs = parsed.activityLogs || [];
           this.notifications = parsed.notifications || [];
           this.initialized = true;
+          // Upgraded from the pre-role-structure store: write it back under the
+          // current key so the migration only runs once.
+          if (!fromCurrent) this.persist();
           return;
         }
       } catch (err) {
@@ -131,7 +206,7 @@ class InMemoryDatabase {
           activityLogs: this.activityLogs,
           notifications: this.notifications,
         };
-        localStorage.setItem('inspire_db_v1', JSON.stringify(serializable));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
       } catch (err) {
         console.warn('Failed to save to localStorage:', err);
       }
@@ -140,7 +215,8 @@ class InMemoryDatabase {
 
   resetToSeed() {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('inspire_db_v1');
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
     }
     this.initialized = false;
     this.initialize();
@@ -157,8 +233,64 @@ export const tenderRepository = {
     return db.users.filter((u) => !u.deletedAt && u.isActive);
   },
 
+  /**
+   * Full department roster for the admin screen: deactivated people are
+   * included so they can be reactivated; deleted people are not.
+   */
+  getRoster(): User[] {
+    return db.users.filter((u) => !u.deletedAt);
+  },
+
+  /** Tenders currently assigned to a person (used before removing them). */
+  countTendersOwnedBy(userId: string): number {
+    return db.tenders.filter((t) => !t.deletedAt && t.ownerId === userId).length;
+  },
+
   getUserById(id: string): User | undefined {
     return db.users.find((u) => u.id === id);
+  },
+
+  /**
+   * Validates a sign-in against the local store.
+   *
+   * There is no server here, so this is a UI gate rather than a security
+   * boundary: the roster and its passwords live in the browser and anyone can
+   * read them. This is the single place to swap for a real authentication
+   * call when a backend exists.
+   */
+  signIn(email: string, password: string): { user?: User; error?: string } {
+    const clean = email.trim().toLowerCase();
+    if (!clean || !password) {
+      return { error: 'Enter your email address and password.' };
+    }
+
+    const user =
+      clean === SHORTCUT_LOGIN
+        ? db.users.find((u) => !u.deletedAt && u.id === SHORTCUT_USER_ID)
+        : db.users.find((u) => !u.deletedAt && u.email.toLowerCase() === clean);
+    if (!user || (user.password ?? DEFAULT_PASSWORD) !== password) {
+      // Same message either way, so the form does not confirm which addresses exist.
+      return { error: 'Those details do not match an account.' };
+    }
+    if (!user.isActive) {
+      return { error: 'This account has been deactivated. Contact Admin 1.' };
+    }
+
+    return { user };
+  },
+
+  /** Lets a signed-in person replace their own password. */
+  changePassword(actor: User, currentPassword: string, nextPassword: string): void {
+    const user = db.users.find((u) => u.id === actor.id && !u.deletedAt);
+    if (!user) throw new Error('Account not found.');
+    if ((user.password ?? DEFAULT_PASSWORD) !== currentPassword) {
+      throw new Error('Your current password is not correct.');
+    }
+    if (nextPassword.trim().length < 8) {
+      throw new Error('Choose a password of at least 8 characters.');
+    }
+    user.password = nextPassword;
+    db.persist();
   },
 
   getUserByEmail(email: string): User | undefined {
@@ -181,9 +313,19 @@ export const tenderRepository = {
     db.resetToSeed();
   },
 
-  createUser(data: Omit<User, 'id' | 'createdAt'>): User {
+  createUser(actor: User, data: Omit<User, 'id' | 'createdAt'>): User {
+    if (!can(actor, 'manage_users')) {
+      throw new Error('Only the Manager or Admin 1 can add persons to the Tendering Department.');
+    }
+    const email = data.email.trim().toLowerCase();
+    if (db.users.some((u) => !u.deletedAt && u.email.toLowerCase() === email)) {
+      throw new Error('A user with this email already exists.');
+    }
     const user: User = {
       ...data,
+      email,
+      name: data.name.trim(),
+      password: data.password || DEFAULT_PASSWORD,
       id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       createdAt: new Date().toISOString(),
     };
@@ -192,12 +334,47 @@ export const tenderRepository = {
     return user;
   },
 
-  updateUser(id: string, data: Partial<User>): User {
+  updateUser(actor: User, id: string, data: Partial<User>): User {
+    if (!can(actor, 'manage_users')) {
+      throw new Error('Only the Manager or Admin 1 can edit roles and permissions.');
+    }
     const idx = db.users.findIndex((u) => u.id === id);
     if (idx === -1) throw new Error('User not found');
-    db.users[idx] = { ...db.users[idx], ...data };
+
+    if (data.email) {
+      const email = data.email.trim().toLowerCase();
+      if (db.users.some((u) => u.id !== id && !u.deletedAt && u.email.toLowerCase() === email)) {
+        throw new Error('Another person already uses this email address.');
+      }
+      data = { ...data, email };
+    }
+
+    if (data.name) data = { ...data, name: data.name.trim() };
+
+    const next = { ...db.users[idx], ...data };
+    assertPeopleAdminRemains(id, next);
+
+    db.users[idx] = next;
     db.persist();
     return db.users[idx];
+  },
+
+  /**
+   * Removes a person from the department. Soft delete, so tenders they own keep
+   * showing their name in history and on the monitoring board.
+   */
+  deleteUser(actor: User, id: string): void {
+    if (!can(actor, 'manage_users')) {
+      throw new Error('Only the Manager or Admin 1 can remove persons.');
+    }
+    const user = db.users.find((u) => u.id === id && !u.deletedAt);
+    if (!user) throw new Error('User not found');
+
+    assertPeopleAdminRemains(id, null);
+
+    user.deletedAt = new Date().toISOString();
+    user.isActive = false;
+    db.persist();
   },
 
   createSource(data: Omit<Source, 'id' | 'aliases'> & { aliases?: string[] }): Source {
@@ -256,8 +433,9 @@ export const tenderRepository = {
    * Get list of tenders, strictly scoped by user role at data layer.
    */
   getTenders(currentUser: User, params?: TenderFilterParams): Tender[] {
-    // 1. Data layer scoping
-    const scoped = scopeTenders(db.tenders, currentUser);
+    // 1. Data layer scoping (populate first so source-based access resolves)
+    const populated = db.tenders.filter((t) => !t.deletedAt).map((t) => this.populateTender(t));
+    const scoped = scopeTenders(populated, currentUser);
 
     // 2. Filter criteria
     let result = scoped;
@@ -308,7 +486,7 @@ export const tenderRepository = {
     // Default sort: tenderNumber descending
     result.sort((a, b) => b.tenderNumber - a.tenderNumber);
 
-    return result.map((t) => this.populateTender(t));
+    return result;
   },
 
   /**
@@ -321,12 +499,14 @@ export const tenderRepository = {
       return { error: 'Tender not found', status: 404 };
     }
 
+    const tender = this.populateTender(raw);
+
     // Verify role-based access
-    if (!canAccessTender(currentUser, raw)) {
+    if (!canAccessTender(currentUser, tender)) {
       return { error: 'Access denied: You do not have permission to view this tender.', status: 403 };
     }
 
-    return { tender: this.populateTender(raw) };
+    return { tender };
   },
 
   getNextTenderNumber(): number {
@@ -377,9 +557,9 @@ export const tenderRepository = {
       throw new Error(`Tender number #${tenderNumber} already exists.`);
     }
 
-    // Role check: Regular user cannot assign owner to someone else
+    // Only Manager / Admin 1 / Admin 2 may assign a tender to someone else.
     let ownerId = data.ownerId || currentUser.id;
-    if (currentUser.role === 'USER') {
+    if (!can(currentUser, 'reassign_owner')) {
       ownerId = currentUser.id;
     }
 
@@ -390,9 +570,7 @@ export const tenderRepository = {
 
     if (initialStatus === 'SUBMITTED') {
       submittedAt = submittedAt || nowIso;
-      const d = new Date(submittedAt);
-      d.setDate(d.getDate() + 30);
-      nextFollowUpAt = d.toISOString();
+      nextFollowUpAt = nextFollowUpFromSubmission(submittedAt);
     }
 
     const newTender: Tender = {
@@ -448,7 +626,7 @@ export const tenderRepository = {
     const tender = db.tenders.find((t) => t.id === id && !t.deletedAt);
     if (!tender) throw new Error('Tender not found');
 
-    if (!can(currentUser, 'edit_tender', tender)) {
+    if (!can(currentUser, 'edit_tender', this.populateTender(tender))) {
       throw new Error('You do not have permission to edit this tender.');
     }
 
@@ -526,7 +704,7 @@ export const tenderRepository = {
     const tender = db.tenders.find((t) => t.id === id && !t.deletedAt);
     if (!tender) throw new Error('Tender not found');
 
-    if (!can(currentUser, 'change_status', tender)) {
+    if (!can(currentUser, 'change_status', this.populateTender(tender))) {
       throw new Error('You do not have permission to change the status of this tender.');
     }
 
@@ -539,7 +717,7 @@ export const tenderRepository = {
       SUBMITTED: ['UNDER_REVIEW', 'AWARDED', 'REJECTED', 'ON_HOLD', 'CANCELLED'],
       UNDER_REVIEW: ['AWARDED', 'REJECTED', 'ON_HOLD', 'CANCELLED'],
       ON_HOLD: ['SUBMITTED', 'UNDER_REVIEW', 'REJECTED', 'CANCELLED'],
-      AWARDED: currentUser.role === 'SUPER_ADMIN' ? ['SUBMITTED', 'UNDER_REVIEW'] : [],
+      AWARDED: can(currentUser, 'revert_terminal_status') ? ['SUBMITTED', 'UNDER_REVIEW'] : [],
       REJECTED: ['SUBMITTED'], // Re-bid increments revision
       CANCELLED: [],
     };
@@ -566,7 +744,7 @@ export const tenderRepository = {
     } else if (newStatus === 'AWARDED') {
       // AWARDED: require projectNumber, contractAmount, contractDate
       if (!can(currentUser, 'record_award')) {
-        throw new Error('Only Super Admin / Admin can record an award.');
+        throw new Error('Only the Manager, Admin 1 or Admin 2 can record an award.');
       }
       if (!payload.projectNumber) {
         throw new Error('Project Number (PJ/N) is required when awarding a tender.');
@@ -597,12 +775,12 @@ export const tenderRepository = {
 
       tender.nextFollowUpAt = null;
 
-      // Notify Super Admin & Owner
-      const superAdmin = db.users.find((u) => u.role === 'SUPER_ADMIN');
-      if (superAdmin && superAdmin.id !== currentUser.id) {
+      // Notify the Manager & the assigned salesperson
+      const manager = db.users.find((u) => u.role === 'MANAGER');
+      if (manager && manager.id !== currentUser.id) {
         db.notifications.unshift({
           id: `notif_${Date.now()}_1`,
-          userId: superAdmin.id,
+          userId: manager.id,
           type: 'AWARDED',
           title: `Project Awarded: PJ/${newAward.projectNumber}`,
           body: `Tender #${tender.tenderNumber} (${tender.clientNameRaw}) has been marked AWARDED by ${currentUser.name}.`,
@@ -634,11 +812,15 @@ export const tenderRepository = {
           tender.revision = 'Rev 1';
         }
       }
-      const d = new Date(tender.submittedAt);
-      d.setDate(d.getDate() + 30);
-      tender.nextFollowUpAt = d.toISOString();
+      tender.nextFollowUpAt = nextFollowUpFromSubmission(tender.submittedAt);
       tender.rejectReason = null;
       tender.rejectNote = null;
+    } else if (newStatus === 'UNDER_REVIEW') {
+      // 'Still Under Process / Ongoing' is a clear status, but the tender stays
+      // engaged: keep a scheduled touchpoint on it.
+      if (!tender.nextFollowUpAt || new Date(tender.nextFollowUpAt) < new Date()) {
+        tender.nextFollowUpAt = defaultNextFollowUp(tender).toISOString();
+      }
     } else if (newStatus === 'CANCELLED' || newStatus === 'ON_HOLD') {
       tender.nextFollowUpAt = null;
       if (newStatus === 'CANCELLED' && payload.cancelReason) {
@@ -695,21 +877,21 @@ export const tenderRepository = {
     const tender = db.tenders.find((t) => t.id === tenderId && !t.deletedAt);
     if (!tender) throw new Error('Tender not found');
 
-    if (!can(currentUser, 'edit_tender', tender)) {
+    const populated = this.populateTender(tender);
+    if (!can(currentUser, 'log_followup', populated)) {
       throw new Error('You do not have permission to log a follow-up on this tender.');
+    }
+    if (!data.outcome || !data.outcome.trim()) {
+      throw new Error('A follow-up outcome must be recorded.');
     }
 
     const nowIso = new Date().toISOString();
 
-    // Rule: Logging a follow-up sets nextFollowUpAt to user's nextActionAt or now + 30 days
-    let nextFollow: string;
-    if (data.nextActionAt) {
-      nextFollow = new Date(data.nextActionAt).toISOString();
-    } else {
-      const d = new Date();
-      d.setDate(d.getDate() + 30);
-      nextFollow = d.toISOString();
-    }
+    // Rule: the next touchpoint is the date chosen by the user, or +30 days,
+    // and it never falls outside the mandatory 2-month follow-up window.
+    const nextFollow = data.nextActionAt
+      ? clampToWindow(populated, new Date(data.nextActionAt)).toISOString()
+      : defaultNextFollowUp(populated).toISOString();
     tender.nextFollowUpAt = nextFollow;
     tender.updatedAt = nowIso;
 
@@ -721,7 +903,7 @@ export const tenderRepository = {
       contactedAt: nowIso,
       method: data.method,
       outcome: data.outcome.trim(),
-      nextActionAt: data.nextActionAt || null,
+      nextActionAt: nextFollow,
       createdAt: nowIso,
     };
 
@@ -790,7 +972,7 @@ export const tenderRepository = {
     if (!tender) throw new Error('Tender not found');
 
     if (!can(currentUser, 'soft_delete')) {
-      throw new Error('Only Super Admin / Admin can delete a tender.');
+      throw new Error('Only the Manager or Admin 1 can delete a tender.');
     }
 
     const nowIso = new Date().toISOString();
@@ -837,42 +1019,89 @@ export const tenderRepository = {
   },
 
   /**
-   * Follow-up Cron Runner: Checks overdue follow-ups and creates FOLLOWUP_DUE notifications
+   * Management & Admin monitoring board.
+   * Returns one row per tender with: assigned salesperson, submission date,
+   * target date, last follow-up, next follow-up, number of follow-ups,
+   * 2-month deadline, current status and overdue flags.
    */
-  runFollowUpCron(bearerToken?: string): { count: number } {
+  getMonitorRows(currentUser: User, params?: TenderFilterParams): MonitorRow[] {
     const now = new Date();
-    let count = 0;
+    return this.getTenders(currentUser, params)
+      .map((t) => buildMonitorRow(t, now))
+      .sort((a, b) => {
+        // Breached first, then soonest deadline.
+        const rank = (r: MonitorRow) => (r.state === 'BREACHED' ? 0 : r.state === 'DUE_SOON' ? 1 : r.state === 'ON_TRACK' ? 2 : 3);
+        if (rank(a) !== rank(b)) return rank(a) - rank(b);
+        const ad = a.deadlineAt ? new Date(a.deadlineAt).getTime() : Infinity;
+        const bd = b.deadlineAt ? new Date(b.deadlineAt).getTime() : Infinity;
+        return ad - bd;
+      });
+  },
 
-    const activeTenders = db.tenders.filter(
-      (t) =>
-        !t.deletedAt &&
-        ['SUBMITTED', 'UNDER_REVIEW', 'ON_HOLD'].includes(t.status) &&
-        t.nextFollowUpAt &&
-        new Date(t.nextFollowUpAt) <= now
-    );
+  /**
+   * Follow-up Cron Runner.
+   * 1. Scheduled touchpoint is due  -> notify the assigned salesperson.
+   * 2. The 2-month window elapsed without a clear status (Awarded / Rejected /
+   *    Still Under Process) -> notify the salesperson and everyone who monitors
+   *    the department (Manager, Admin 1, Admin 2).
+   */
+  runFollowUpCron(bearerToken?: string): { count: number; dueCount: number; breachedCount: number } {
+    const now = new Date();
+    let dueCount = 0;
+    let breachedCount = 0;
 
-    for (const t of activeTenders) {
-      // Check if unread notification already exists for this tender
-      const existing = db.notifications.find(
-        (n) => n.userId === t.ownerId && n.type === 'FOLLOWUP_DUE' && n.linkUrl === `/tenders/${t.id}` && !n.readAt
-      );
+    const liveTenders = db.tenders.filter((t) => !t.deletedAt);
+    const monitors = db.users.filter((u) => u.isActive && hasFullAccess(u));
 
-      if (!existing) {
+    const hasUnread = (userId: string, type: Notification['type'], link: string) =>
+      db.notifications.some((n) => n.userId === userId && n.type === type && n.linkUrl === link && !n.readAt);
+
+    for (const t of liveTenders) {
+      const link = `/tenders/${t.id}`;
+
+      // 1. Scheduled follow-up is due
+      const followUpDue =
+        ACTIVE_STATUSES.includes(t.status) && t.nextFollowUpAt && new Date(t.nextFollowUpAt) <= now;
+
+      if (followUpDue && !hasUnread(t.ownerId, 'FOLLOWUP_DUE', link)) {
         db.notifications.unshift({
           id: `notif_${Date.now()}_${t.id}`,
           userId: t.ownerId,
           type: 'FOLLOWUP_DUE',
           title: `Follow-up Due: Tender #${t.tenderNumber}`,
           body: `Tender for ${t.clientNameRaw} (${t.location}) is due for follow-up.`,
-          linkUrl: `/tenders/${t.id}`,
+          linkUrl: link,
           createdAt: now.toISOString(),
         });
-        count++;
+        dueCount++;
+      }
+
+      // 2. Past the mandatory 2-month window with no clear status
+      const { state, daysToDeadline } = deadlineState(this.populateTender(t), now);
+      if (state === 'BREACHED') {
+        const overdueBy = Math.abs(daysToDeadline ?? 0);
+        const body = `Tender #${t.tenderNumber} (${t.clientNameRaw}) passed its 2-month follow-up deadline ${overdueBy} day(s) ago. Record a clear status: Awarded, Rejected, or Still Under Process.`;
+
+        const recipients = new Set<string>([t.ownerId, ...monitors.map((m) => m.id)]);
+        for (const userId of recipients) {
+          if (hasUnread(userId, 'FOLLOWUP_DUE', link)) continue;
+          db.notifications.unshift({
+            id: `notif_${Date.now()}_dl_${t.id}_${userId}`,
+            userId,
+            type: 'FOLLOWUP_DUE',
+            title: `2-Month Deadline Passed: Tender #${t.tenderNumber}`,
+            body,
+            linkUrl: link,
+            createdAt: now.toISOString(),
+          });
+        }
+        breachedCount++;
       }
     }
 
+    const count = dueCount + breachedCount;
     if (count > 0) db.persist();
-    return { count };
+    return { count, dueCount, breachedCount };
   },
 
   /**
@@ -919,7 +1148,7 @@ export const tenderRepository = {
     errors: string[];
   } {
     if (!can(currentUser, 'import_excel')) {
-      throw new Error('Only Super Admin / Admin can import Excel data.');
+      throw new Error('Only the Manager, Admin 1 or Admin 2 can import Excel data.');
     }
 
     let createdCount = 0;

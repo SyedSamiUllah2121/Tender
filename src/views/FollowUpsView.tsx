@@ -22,12 +22,49 @@ import { Tender, FollowUpMethod } from '../types';
 import { formatAED } from '../lib/money';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { getWhatsAppUrl } from '../lib/notify/deepLink';
+import { hasFullAccess } from '../lib/permissions';
+import {
+  ACTIVE_STATUSES,
+  FOLLOW_UP_WINDOW_MONTHS,
+  clampToWindow,
+  deadlineState,
+  followUpDeadline,
+} from '../lib/followUpPolicy';
+
+const BUCKETS = [
+  {
+    key: 'breached' as const,
+    label: `Past ${FOLLOW_UP_WINDOW_MONTHS}-month deadline`,
+    dot: 'bg-[#8b151b]',
+    hint: 'Past the follow-up window with no clear status. Record Awarded, Rejected, or Still Under Process.',
+  },
+  {
+    key: 'overdue' as const,
+    label: 'Overdue',
+    dot: 'bg-rose-500',
+    hint: 'The scheduled touchpoint date has passed.',
+  },
+  {
+    key: 'this_week' as const,
+    label: 'Due this week',
+    dot: 'bg-amber-500',
+    hint: 'Scheduled within the next 7 days.',
+  },
+  {
+    key: 'upcoming' as const,
+    label: 'Upcoming',
+    dot: 'bg-slate-400',
+    hint: 'Scheduled beyond this week.',
+  },
+];
 
 export const FollowUpsView: React.FC = () => {
   const router = useRouter();
   const { currentUser, dataVersion, refreshData } = useAuth();
-  const [teamWide, setTeamWide] = useState(currentUser.role !== 'USER');
-  const [activeBucket, setActiveBucket] = useState<'overdue' | 'this_week' | 'upcoming'>('overdue');
+  const [teamWide, setTeamWide] = useState(hasFullAccess(currentUser));
+  const [activeBucket, setActiveBucket] = useState<'breached' | 'overdue' | 'this_week' | 'upcoming'>(
+    'overdue'
+  );
 
   // Inline Log Form state
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
@@ -48,9 +85,13 @@ export const FollowUpsView: React.FC = () => {
   const tenders = useMemo(() => {
     let list = tenderRepository.getTenders(currentUser);
     // Active pipeline only
-    list = list.filter((t) => ['SUBMITTED', 'UNDER_REVIEW', 'ON_HOLD'].includes(t.status) && t.nextFollowUpAt);
+    list = list.filter(
+      (t) =>
+        ACTIVE_STATUSES.includes(t.status) &&
+        (t.nextFollowUpAt || deadlineState(t, now).state === 'BREACHED')
+    );
 
-    if (currentUser.role !== 'USER' && !teamWide) {
+    if (hasFullAccess(currentUser) && !teamWide) {
       list = list.filter((t) => t.ownerId === currentUser.id);
     }
     return list;
@@ -58,12 +99,20 @@ export const FollowUpsView: React.FC = () => {
 
   // Buckets
   const buckets = useMemo(() => {
+    const breached: Tender[] = [];
     const overdue: Tender[] = [];
     const thisWeek: Tender[] = [];
     const upcoming: Tender[] = [];
 
     tenders.forEach((t) => {
-      const d = new Date(t.nextFollowUpAt!);
+      // Past the mandatory 2-month window without a clear status: these need a
+      // decision (Awarded / Rejected / Still Under Process), not just a call.
+      if (deadlineState(t, now).state === 'BREACHED') {
+        breached.push(t);
+        return;
+      }
+      if (!t.nextFollowUpAt) return;
+      const d = new Date(t.nextFollowUpAt);
       if (d < now) {
         overdue.push(t);
       } else if (d <= weekFromNow) {
@@ -75,33 +124,48 @@ export const FollowUpsView: React.FC = () => {
 
     // Sort by earliest date first
     const sortFn = (a: Tender, b: Tender) =>
-      new Date(a.nextFollowUpAt!).getTime() - new Date(b.nextFollowUpAt!).getTime();
+      new Date(a.nextFollowUpAt || a.submittedAt || 0).getTime() -
+      new Date(b.nextFollowUpAt || b.submittedAt || 0).getTime();
 
     return {
+      breached: breached.sort(sortFn),
       overdue: overdue.sort(sortFn),
       thisWeek: thisWeek.sort(sortFn),
       upcoming: upcoming.sort(sortFn),
     };
   }, [tenders, now, weekFromNow]);
 
+  const counts = {
+    breached: buckets.breached.length,
+    overdue: buckets.overdue.length,
+    this_week: buckets.thisWeek.length,
+    upcoming: buckets.upcoming.length,
+  };
+
   const activeList =
-    activeBucket === 'overdue'
+    activeBucket === 'breached'
+      ? buckets.breached
+      : activeBucket === 'overdue'
       ? buckets.overdue
       : activeBucket === 'this_week'
       ? buckets.thisWeek
       : buckets.upcoming;
 
   // Handle inline log submit
+  const selectedDeadline = selectedTender ? followUpDeadline(selectedTender) : null;
+  const deadlineISO = selectedDeadline ? selectedDeadline.toISOString().substring(0, 10) : null;
+
   const handleSaveFollowUp = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTender || !outcome.trim()) return;
 
     setSubmitting(true);
     try {
+      const requested = nextActionDate ? new Date(nextActionDate) : null;
       tenderRepository.addFollowUp(currentUser, selectedTender.id, {
         method,
         outcome,
-        nextActionAt: nextActionDate || null,
+        nextActionAt: requested ? clampToWindow(selectedTender, requested).toISOString() : null,
       });
       refreshData();
       setSelectedTender(null);
@@ -118,16 +182,16 @@ export const FollowUpsView: React.FC = () => {
       {/* Title & Team Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-base font-semibold text-slate-900">
             Client Follow-up Worklist
           </h1>
           <p className="text-xs text-slate-500">
-            Prioritized touchpoint schedule to keep active bids warm and prevent deal slippage
+            Tenders due a follow-up, and those past the 2-month deadline.
           </p>
         </div>
 
-        {currentUser.role !== 'USER' && (
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-lg border border-slate-200 cursor-pointer shadow-xs">
+        {hasFullAccess(currentUser) && (
+          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-md border border-slate-300 cursor-pointer">
             <input
               type="checkbox"
               checked={teamWide}
@@ -139,85 +203,48 @@ export const FollowUpsView: React.FC = () => {
         )}
       </div>
 
-      {/* 3 Buckets Tabs */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Overdue */}
-        <div
-          onClick={() => setActiveBucket('overdue')}
-          className={`p-4 rounded-xl border transition-all cursor-pointer shadow-xs ${
-            activeBucket === 'overdue'
-              ? 'bg-red-50/90 border-red-300 ring-2 ring-red-500'
-              : 'bg-white border-gray-200 hover:border-red-200'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-bold text-red-900 uppercase tracking-wider">
-              <AlertCircle className="w-4 h-4 text-red-600" />
-              <span>Overdue Follow-ups</span>
-            </div>
-            <span className="text-lg font-black text-red-700 font-mono">
-              {buckets.overdue.length}
-            </span>
-          </div>
-          <p className="text-[11px] text-red-700/80 mt-1">
-            Immediate touchpoint past schedule
-          </p>
-        </div>
-
-        {/* Due This Week */}
-        <div
-          onClick={() => setActiveBucket('this_week')}
-          className={`p-4 rounded-xl border transition-all cursor-pointer shadow-xs ${
-            activeBucket === 'this_week'
-              ? 'bg-amber-50/90 border-amber-300 ring-2 ring-amber-500'
-              : 'bg-white border-gray-200 hover:border-amber-200'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-bold text-amber-900 uppercase tracking-wider">
-              <Clock className="w-4 h-4 text-amber-600" />
-              <span>Due This Week</span>
-            </div>
-            <span className="text-lg font-black text-amber-700 font-mono">
-              {buckets.thisWeek.length}
-            </span>
-          </div>
-          <p className="text-[11px] text-amber-700/80 mt-1">Scheduled in the next 7 days</p>
-        </div>
-
-        {/* Upcoming */}
-        <div
-          onClick={() => setActiveBucket('upcoming')}
-          className={`p-4 rounded-xl border transition-all cursor-pointer shadow-xs ${
-            activeBucket === 'upcoming'
-              ? 'bg-blue-50/90 border-blue-300 ring-2 ring-blue-500'
-              : 'bg-white border-gray-200 hover:border-blue-200'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs font-bold text-blue-900 uppercase tracking-wider">
-              <CalendarClock className="w-4 h-4 text-blue-600" />
-              <span>Upcoming</span>
-            </div>
-            <span className="text-lg font-black text-blue-700 font-mono">
-              {buckets.upcoming.length}
-            </span>
-          </div>
-          <p className="text-[11px] text-blue-700/80 mt-1">Scheduled for future weeks</p>
-        </div>
+      {/* Buckets, as tabs over the list below */}
+      <div className="flex flex-wrap items-center border-b border-slate-300">
+        {BUCKETS.map((b) => {
+          const on = activeBucket === b.key;
+          return (
+            <button
+              key={b.key}
+              type="button"
+              onClick={() => setActiveBucket(b.key)}
+              className={`flex items-center gap-2 px-3 py-2 -mb-px border-b-2 text-xs transition-colors cursor-pointer ${
+                on
+                  ? 'border-[#8b151b] text-slate-900 font-medium'
+                  : 'border-transparent text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${b.dot}`} />
+              <span>{b.label}</span>
+              <span className="font-mono tabular-nums text-slate-400">{counts[b.key]}</span>
+            </button>
+          );
+        })}
       </div>
 
+      <p className="text-[11px] text-slate-500">
+        {BUCKETS.find((b) => b.key === activeBucket)?.hint}
+      </p>
+
       {/* Main List */}
-      <div className="bg-white rounded-xl border border-[var(--border)] shadow-xs divide-y divide-gray-100">
+      <div className="bg-white rounded-md border border-[var(--border)] divide-y divide-slate-200">
         {activeList.length === 0 ? (
           <div className="p-12 text-center text-xs text-gray-400">
             No tenders in this follow-up category.
           </div>
         ) : (
           activeList.map((tender) => {
-            const nextDate = new Date(tender.nextFollowUpAt!);
-            const diffDays = Math.round((nextDate.getTime() - now.getTime()) / 86400000);
-            const isLate = diffDays < 0;
+            const nextDate = tender.nextFollowUpAt ? new Date(tender.nextFollowUpAt) : null;
+            const diffDays = nextDate
+              ? Math.round((nextDate.getTime() - now.getTime()) / 86400000)
+              : null;
+            const isLate = diffDays !== null && diffDays < 0;
+            const { state, daysToDeadline } = deadlineState(tender, now);
+            const pastWindow = state === 'BREACHED';
 
             const waText = `Dear ${tender.clientNameRaw}, following up on our commercial proposal for ${tender.location} (Tender #${tender.tenderNumber}) from Inspire Builders General Contracting. Kindly let us know if you require any clarifications.`;
             const waUrl = getWhatsAppUrl('+971500000000', waText);
@@ -225,7 +252,7 @@ export const FollowUpsView: React.FC = () => {
             return (
               <div
                 key={tender.id}
-                className="p-4 hover:bg-gray-50/60 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                className="p-4 hover:bg-gray-50 transition flex flex-col sm:flex-row sm:items-center justify-between gap-4"
               >
                 {/* Tender details */}
                 <div className="space-y-1 min-w-0 flex-1">
@@ -237,6 +264,11 @@ export const FollowUpsView: React.FC = () => {
                       {tender.clientNameRaw}
                     </span>
                     <StatusBadge status={tender.status} size="sm" />
+                    {pastWindow && (
+                      <span className="px-1.5 py-0.5 rounded border border-red-300 bg-red-50 text-red-800 text-[10px] font-bold uppercase tracking-wide">
+                        {FOLLOW_UP_WINDOW_MONTHS}-month deadline passed
+                      </span>
+                    )}
                   </div>
 
                   <div className="text-xs text-gray-500 flex items-center gap-3 flex-wrap">
@@ -248,6 +280,13 @@ export const FollowUpsView: React.FC = () => {
                     <span>•</span>
                     <span>Owner: {tender.owner?.name || 'Unassigned'}</span>
                   </div>
+
+                  {pastWindow && (
+                    <div className="text-[11px] text-red-700 font-medium">
+                      Submitted {tender.submittedAt?.substring(0, 10)} — record a clear status:
+                      Awarded, Rejected, or Still Under Process.
+                    </div>
+                  )}
 
                   {tender.remarks && (
                     <div className="text-[11px] text-gray-500 italic truncate max-w-lg">
@@ -261,14 +300,27 @@ export const FollowUpsView: React.FC = () => {
                   <div className="text-right">
                     <div
                       className={`text-xs font-bold font-mono ${
-                        isLate ? 'text-red-700' : 'text-amber-700'
+                        isLate || pastWindow ? 'text-red-700' : 'text-amber-700'
                       }`}
                     >
-                      {isLate ? `${Math.abs(diffDays)} days overdue` : `Due in ${diffDays} days`}
+                      {diffDays === null
+                        ? 'No touchpoint scheduled'
+                        : isLate
+                        ? `${Math.abs(diffDays)} days overdue`
+                        : `Due in ${diffDays} days`}
                     </div>
                     <div className="text-[10px] text-gray-400 font-mono">
-                      {tender.nextFollowUpAt!.substring(0, 10)}
+                      {tender.nextFollowUpAt
+                        ? tender.nextFollowUpAt.substring(0, 10)
+                        : 'Deadline ' + (followUpDeadline(tender)?.toISOString().substring(0, 10) || '—')}
                     </div>
+                    {daysToDeadline !== null && state !== 'RESOLVED' && (
+                      <div className="text-[10px] font-mono text-slate-500">
+                        {daysToDeadline < 0
+                          ? `${Math.abs(daysToDeadline)}d past deadline`
+                          : `${daysToDeadline}d left in window`}
+                      </div>
+                    )}
                   </div>
 
                   {/* Direct WhatsApp Pre-filled link */}
@@ -276,7 +328,7 @@ export const FollowUpsView: React.FC = () => {
                     href={waUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition cursor-pointer"
+                    className="p-2 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 transition cursor-pointer"
                     title="Send WhatsApp Follow-up message"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -289,7 +341,7 @@ export const FollowUpsView: React.FC = () => {
                       setSelectedTender(tender);
                       setOutcome('');
                     }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                    className="px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1 cursor-pointer transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Log Touchpoint</span>
@@ -298,7 +350,7 @@ export const FollowUpsView: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => router.push(`/tenders/${tender.id}`)}
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 cursor-pointer"
+                    className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 cursor-pointer"
                     title="View Tender Details"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -313,10 +365,10 @@ export const FollowUpsView: React.FC = () => {
       {/* Inline Modal to Log Follow-up without navigating away */}
       {selectedTender && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div className="bg-white rounded-md shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-[#8b151b]">
+                <div className="text-[11px] font-medium text-slate-500">
                   Log Client Touchpoint
                 </div>
                 <h3 className="text-sm font-bold text-gray-900">
@@ -340,7 +392,7 @@ export const FollowUpsView: React.FC = () => {
                 <select
                   value={method}
                   onChange={(e) => setMethod(e.target.value as FollowUpMethod)}
-                  className="w-full p-2 rounded-lg border border-gray-300 bg-white font-medium"
+                  className="w-full p-2 rounded-md border border-slate-400 bg-white font-medium"
                 >
                   <option value="WhatsApp">WhatsApp</option>
                   <option value="Call">Phone Call</option>
@@ -359,34 +411,41 @@ export const FollowUpsView: React.FC = () => {
                   value={outcome}
                   onChange={(e) => setOutcome(e.target.value)}
                   placeholder="e.g. Client confirmed consultant is finalizing BOQ comparisons..."
-                  className="w-full p-2 rounded-lg border border-gray-300"
+                  className="w-full p-2 rounded-md border border-slate-400"
                 />
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                  Schedule Next Follow-up (Defaults to +30 days)
+                  Schedule Next Follow-up (defaults to +30 days)
                 </label>
                 <input
                   type="date"
                   value={nextActionDate}
+                  max={deadlineISO || undefined}
                   onChange={(e) => setNextActionDate(e.target.value)}
-                  className="w-full p-2 rounded-lg border border-gray-300 bg-white"
+                  className="w-full p-2 rounded-md border border-slate-400 bg-white"
                 />
+                {deadlineISO && (
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    Follow-up window closes {deadlineISO}. A later date is pulled back to the
+                    deadline, where a clear status must be recorded.
+                  </p>
+                )}
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setSelectedTender(null)}
-                  className="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer"
+                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-1.5 rounded-lg text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] cursor-pointer transition-colors shadow-xs"
+                  className="px-4 py-1.5 rounded-md text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] cursor-pointer transition-colors"
                 >
                   {submitting ? 'Saving...' : 'Save Follow-up'}
                 </button>

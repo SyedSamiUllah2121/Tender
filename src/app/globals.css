@@ -9,14 +9,14 @@
   --brand-hover: #731217;
   --brand-active: #5e0d12;
   --brand-subtle: #fdf2f2;
-  --brand-border: #fecaca;
+  --brand-border: #fca5a5;
   --brand-ring: rgba(139, 21, 27, 0.2);
 
   /* Sophisticated Modern Slate Neutrals */
   --bg-canvas: #f8fafc;
   --card: #ffffff;
-  --border: #e2e8f0;
-  --border-subtle: #f1f5f9;
+  --border: #cbd5e1;
+  --border-subtle: #e2e8f0;
   --text-900: #0f172a;
   --text-700: #334155;
   --text-500: #64748b;
@@ -25,11 +25,11 @@
   /* Status Colors */
   --green-fg: #15803d;
   --green-bg: #f0fdf4;
-  --green-border: #bbf7d0;
+  --green-border: #86efac;
 
   --red-fg: #b91c1c;
   --red-bg: #fef2f2;
-  --red-border: #fecaca;
+  --red-border: #fca5a5;
   --red-50: #fdf2f2;
   --red-100: #fee2e2;
   --red-200: #fecaca;
@@ -41,23 +41,23 @@
 
   --blue-fg: #1d4ed8;
   --blue-bg: #eff6ff;
-  --blue-border: #bfdbfe;
+  --blue-border: #93c5fd;
 
   --amber-fg: #b45309;
   --amber-bg: #fffbeb;
-  --amber-border: #fde68a;
+  --amber-border: #fcd34d;
 
   --purple-fg: #7e22ce;
   --purple-bg: #faf5ff;
-  --purple-border: #e9d5ff;
+  --purple-border: #d8b4fe;
 
   --teal-fg: #0f766e;
   --teal-bg: #f0fdfa;
-  --teal-border: #99f6e4;
+  --teal-border: #5eead4;
 
   --grey-fg: #475569;
   --grey-bg: #f8fafc;
-  --grey-border: #e2e8f0;
+  --grey-border: #cbd5e1;
 }
 
 body {

@@ -10,11 +10,12 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
+  LogOut,
   SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
-import { Notification } from '../../types';
+import { Notification, ROLE_LABELS } from '../../types';
 
 interface AppHeaderProps {
   onOpenCommandPalette: () => void;
@@ -22,7 +23,7 @@ interface AppHeaderProps {
 
 export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) => {
   const router = useRouter();
-  const { currentUser, allUsers, switchUser, refreshData, dataVersion } = useAuth();
+  const { currentUser, signOut, refreshData, dataVersion } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -53,7 +54,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
     setCronRunning(true);
     const result = tenderRepository.runFollowUpCron();
     refreshData();
-    setCronMessage(`Follow-up check complete: ${result.count} new alert(s) logged.`);
+    setCronMessage(
+      `Follow-up check complete: ${result.dueCount} due, ${result.breachedCount} past the 2-month deadline.`
+    );
     setTimeout(() => {
       setCronRunning(false);
       setTimeout(() => setCronMessage(null), 3500);
@@ -61,29 +64,22 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#8b151b] border-b border-[#731217] text-white select-none shadow-sm">
+    <header className="sticky top-0 z-40 bg-[#0d0d0d] border-b border-[#333333] text-white select-none">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-15 flex items-center justify-between gap-4">
         {/* Brand & Identity */}
         <div
           className="flex items-center gap-3 cursor-pointer group"
           onClick={() => router.push('/dashboard')}
         >
-          <div className="w-8 h-8 rounded-lg bg-white text-[#8b151b] flex items-center justify-center font-extrabold text-xs tracking-wider shadow-xs transition-colors relative">
-            <span>IB</span>
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-[#8b151b]" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-[13.5px] tracking-tight text-white group-hover:text-red-100 transition-colors">
-                INSPIRE BUILDERS
-              </span>
-              <span className="hidden sm:inline-flex text-[10px] font-semibold tracking-wide uppercase px-2 py-0.5 rounded-full bg-white/15 text-white border border-white/20">
-                Commercial ERP
-              </span>
-            </div>
-            <div className="text-[11px] text-red-200/90 font-normal tracking-tight">
-              Abu Dhabi & Dubai Commercial Operations
-            </div>
+          <img
+            src="/logo.png"
+            alt="Inspire Builders"
+            width={930}
+            height={260}
+            className="h-9 w-auto block shrink-0 self-center"
+          />
+          <div className="hidden lg:block border-l border-[#333333] pl-3 text-[11px] text-[#9a9a9a]">
+            Tendering Department
           </div>
         </div>
 
@@ -92,13 +88,13 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
           <button
             type="button"
             onClick={onOpenCommandPalette}
-            className="w-full flex items-center justify-between px-3 py-1.5 bg-black/20 hover:bg-black/30 text-white/90 hover:text-white rounded-lg border border-white/15 text-xs transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-3 py-1.5 bg-[#1a1a1a] hover:bg-[#262626] text-[#d4d4d4] hover:text-white rounded-md border border-[#333333] text-xs transition-colors cursor-pointer"
           >
             <div className="flex items-center gap-2">
-              <Search className="w-3.5 h-3.5 text-red-200" />
-              <span className="text-red-100/90 font-normal">Search tenders, clients, locations...</span>
+              <Search className="w-3.5 h-3.5 text-[#9a9a9a]" />
+              <span className="text-[#b5b5b5] font-normal">Search tenders, clients, locations...</span>
             </div>
-            <kbd className="px-1.5 py-0.5 text-[10px] font-medium font-mono bg-white/15 rounded border border-white/20 text-white shadow-2xs">
+            <kbd className="px-1.5 py-0.5 text-[10px] font-medium font-mono bg-[#1f1f1f] rounded border border-[#404040] text-white">
               ⌘K
             </kbd>
           </button>
@@ -112,9 +108,9 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
             onClick={handleRunCron}
             disabled={cronRunning}
             title="Run daily follow-up automation check"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-medium text-white border border-white/15 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#1a1a1a] hover:bg-[#2b2b2b] text-xs font-medium text-white border border-[#333333] transition-colors cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-red-200 ${cronRunning ? 'animate-spin text-white' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#b5b5b5] ${cronRunning ? 'animate-spin text-white' : ''}`} />
             <span className="hidden sm:inline">Cron Check</span>
           </button>
 
@@ -126,18 +122,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
                 setShowNotifications(!showNotifications);
                 setShowUserMenu(false);
               }}
-              className="relative p-2 rounded-lg hover:bg-white/15 text-white/90 hover:text-white border border-transparent hover:border-white/15 transition-colors cursor-pointer"
+              className="relative p-2 rounded-md hover:bg-[#1f1f1f] text-[#d4d4d4] hover:text-white border border-transparent hover:border-[#333333] transition-colors cursor-pointer"
               title="Notifications"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#8b151b]" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-[#0d0d0d]" />
               )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white text-slate-900 rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in-50 duration-100">
-                <div className="p-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white text-slate-900 rounded-md shadow-xl border border-slate-300 overflow-hidden z-50 animate-in fade-in-50 duration-100">
+                <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-xs text-slate-900">
                       Notifications
@@ -159,7 +155,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
                   )}
                 </div>
 
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-200">
                   {notifications.length === 0 ? (
                     <div className="p-6 text-center text-xs text-slate-400">
                       No notifications yet.
@@ -170,7 +166,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
                         key={n.id}
                         onClick={() => handleNotificationClick(n)}
                         className={`p-3 text-xs hover:bg-slate-50 cursor-pointer transition-colors flex gap-2.5 items-start ${
-                          !n.readAt ? 'bg-amber-50/30' : ''
+                          !n.readAt ? 'bg-amber-50' : ''
                         }`}
                       >
                         <div className="mt-0.5 shrink-0">
@@ -217,23 +213,23 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
                 setShowUserMenu(!showUserMenu);
                 setShowNotifications(false);
               }}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 border border-white/15 transition-colors cursor-pointer text-left"
+              className="flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-[#1a1a1a] hover:bg-[#2b2b2b] border border-[#333333] transition-colors cursor-pointer text-left"
             >
-              <div className="w-6 h-6 rounded-md bg-white text-[#8b151b] font-bold text-[11px] flex items-center justify-center shadow-2xs">
+              <div className="w-6 h-6 rounded-md bg-[#c8202a] text-white font-bold text-[11px] flex items-center justify-center">
                 {currentUser.name.charAt(0)}
               </div>
               <div className="hidden sm:block">
                 <div className="text-xs font-semibold text-white leading-none">{currentUser.name}</div>
-                <div className="text-[10px] text-red-200 font-mono tracking-tight mt-0.5">
-                  {currentUser.role}
+                <div className="text-[10px] text-[#9a9a9a] font-mono tracking-tight mt-0.5">
+                  {ROLE_LABELS[currentUser.role]}
                 </div>
               </div>
-              <ChevronDown className="w-3.5 h-3.5 text-red-200" />
+              <ChevronDown className="w-3.5 h-3.5 text-[#9a9a9a]" />
             </button>
 
             {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-72 bg-white text-slate-900 rounded-xl shadow-xl border border-slate-200 overflow-hidden z-50 animate-in fade-in-50 duration-100">
-                <div className="p-3 bg-slate-50/80 border-b border-slate-100">
+              <div className="absolute right-0 mt-2 w-72 bg-white text-slate-900 rounded-md shadow-xl border border-slate-300 overflow-hidden z-50 animate-in fade-in-50 duration-100">
+                <div className="p-3 bg-slate-50 border-b border-slate-200">
                   <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                     Active Account
                   </div>
@@ -249,43 +245,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
                   </div>
                 </div>
 
-                <div className="p-2 border-b border-slate-100">
-                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-2 py-1">
-                    Switch User (Audit Scoping)
-                  </div>
-                  <div className="space-y-0.5">
-                    {allUsers.map((u) => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => {
-                          switchUser(u.id);
-                          setShowUserMenu(false);
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors cursor-pointer ${
-                          u.id === currentUser.id
-                            ? 'bg-slate-100 text-slate-900 font-semibold'
-                            : 'hover:bg-slate-50 text-slate-600 hover:text-slate-900'
-                        }`}
-                      >
-                        <div>
-                          <div className="font-medium">{u.name}</div>
-                          <div className="text-[10px] text-slate-400">{u.email}</div>
-                        </div>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
-                            u.role === 'SUPER_ADMIN'
-                              ? 'bg-purple-50 text-purple-700 border border-purple-200'
-                              : u.role === 'MANAGER'
-                              ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {u.role}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                <div className="p-2 border-b border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUserMenu(false);
+                      signOut();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Sign out</span>
+                  </button>
                 </div>
 
                 <div className="p-2 bg-slate-50 flex items-center justify-between text-[11px] text-slate-500">
@@ -310,7 +281,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
 
       {/* Floating feedback message for cron or notifications */}
       {cronMessage && (
-        <div className="bg-[#5e0d12] text-white text-center text-xs py-1.5 font-medium px-4 border-t border-black/20">
+        <div className="bg-[#5e0d12] text-white text-center text-xs py-1.5 font-medium px-4 border-t border-[#5e0d12]">
           {cronMessage}
         </div>
       )}

@@ -4,9 +4,12 @@ import React, { useState } from 'react';
 import { Building, PlusCircle, Phone, Mail, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
+import { can } from '../lib/permissions';
+import { AccessDenied } from '../components/ui/AccessDenied';
 
 export const AdminConsultantsView: React.FC = () => {
-  const { dataVersion, refreshData } = useAuth();
+  const { currentUser, dataVersion, refreshData } = useAuth();
+  const allowed = can(currentUser, 'manage_admin');
   const consultants = tenderRepository.getConsultants();
 
   const [showModal, setShowModal] = useState(false);
@@ -34,39 +37,41 @@ export const AdminConsultantsView: React.FC = () => {
     refreshData();
   };
 
+  if (!allowed) return <AccessDenied requirement="Only the Manager, Admin 1 and Admin 2 administer the Tendering Department." />;
+
   return (
     <div className="space-y-6 pb-20 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+          <h1 className="text-base font-semibold text-slate-900">
             Consultant Engineering Directory
           </h1>
           <p className="text-xs text-slate-500">
-            Architectural and engineering supervision consultants across Abu Dhabi & Dubai municipalities
+            Supervising consultants on file, with contacts.
           </p>
         </div>
 
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
+          className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 cursor-pointer transition-colors"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Add Consultant</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-[var(--border)] shadow-xs overflow-hidden">
+      <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
+            <tr className="border-b border-slate-300 bg-gray-50 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
               <th className="p-3">Consultant Company</th>
               <th className="p-3">Lead Project Engineer</th>
               <th className="p-3">Contact Phone</th>
               <th className="p-3">Email</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-slate-200">
             {consultants.map((c) => (
               <tr key={c.id} className="hover:bg-gray-50">
                 <td className="p-3 font-bold text-gray-900">{c.companyName}</td>
@@ -92,8 +97,8 @@ export const AdminConsultantsView: React.FC = () => {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4">
-            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+          <div className="bg-white rounded-md shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="text-sm font-bold text-gray-900">Add Engineering Consultant</h3>
               <button
                 type="button"
@@ -115,7 +120,7 @@ export const AdminConsultantsView: React.FC = () => {
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="e.g. Diar Consultants"
-                  className="w-full p-2 rounded-lg border border-gray-300"
+                  className="w-full p-2 rounded-md border border-slate-400"
                 />
               </div>
 
@@ -128,7 +133,7 @@ export const AdminConsultantsView: React.FC = () => {
                   value={engineerName}
                   onChange={(e) => setEngineerName(e.target.value)}
                   placeholder="e.g. Engr. Bassem"
-                  className="w-full p-2 rounded-lg border border-gray-300"
+                  className="w-full p-2 rounded-md border border-slate-400"
                 />
               </div>
 
@@ -142,7 +147,7 @@ export const AdminConsultantsView: React.FC = () => {
                     value={contactNumber}
                     onChange={(e) => setContactNumber(e.target.value)}
                     placeholder="050-XXXXXXX"
-                    className="w-full p-2 rounded-lg border border-gray-300"
+                    className="w-full p-2 rounded-md border border-slate-400"
                   />
                 </div>
 
@@ -155,22 +160,22 @@ export const AdminConsultantsView: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="info@consultant.ae"
-                    className="w-full p-2 rounded-lg border border-gray-300"
+                    className="w-full p-2 rounded-md border border-slate-400"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-3 py-1.5 rounded-lg text-gray-600 hover:bg-gray-100 cursor-pointer"
+                  className="px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-lg text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer shadow-xs"
+                  className="px-4 py-1.5 rounded-md text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer"
                 >
                   Save Consultant
                 </button>
