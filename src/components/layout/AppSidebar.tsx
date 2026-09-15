@@ -8,7 +8,6 @@ import {
   Trophy,
   CalendarClock,
   BarChart3,
-  FileUp,
   Users,
   GitFork,
   Briefcase,
@@ -90,11 +89,6 @@ export const AppSidebar: React.FC = () => {
   }
 
   const adminNav = [
-    {
-      id: '/admin/import',
-      label: 'Excel Migration',
-      icon: FileUp,
-    },
     {
       id: '/admin/sources',
       label: 'Lead Sources',

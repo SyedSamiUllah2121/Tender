@@ -38,7 +38,6 @@ export const ROLE_DESCRIPTIONS: Record<Role, string> = {
 export type TenderStatus = 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'AWARDED' | 'REJECTED' | 'CANCELLED' | 'ON_HOLD';
 export type Region = 'ABU_DHABI' | 'DUBAI' | 'OTHER';
 export type SourceKind = 'PERSON' | 'EMAIL' | 'WHATSAPP' | 'CONSULTANT' | 'WALK_IN' | 'INTERNAL_SALES' | 'BROKER' | 'CLIENT_DIRECT' | 'MANAGEMENT' | 'EXHIBITION' | 'OTHER';
-export type DuplicateStrategy = 'SKIP' | 'OVERWRITE' | 'REVISION';
 export type FollowUpMethod = 'WhatsApp' | 'Call' | 'Email' | 'Visit';
 export type RejectReason = 
   | 'PRICE_TOO_HIGH'

@@ -13,7 +13,6 @@ export type Action =
   | 'manage_admin'
   | 'manage_users'
   | 'monitor_department'
-  | 'import_excel'
   | 'export_excel'
   | 'company_reports';
 
@@ -97,9 +96,8 @@ export function can(user: User | null | undefined, action: Action, resource?: Te
     case 'soft_delete':
       return role === 'ADMIN_1' || role === 'MANAGER';
 
-    // Sources, consultants and Excel migration: department administration.
+    // Sources and consultants: department administration.
     case 'manage_admin':
-    case 'import_excel':
       return full;
 
     // Adding persons and editing roles & permissions.

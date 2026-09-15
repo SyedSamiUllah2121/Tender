@@ -13,7 +13,6 @@ import {
   RejectReason,
   TenderFilterParams,
   Region,
-  DuplicateStrategy,
 } from '../../types';
 import {
   DEFAULT_PASSWORD,
@@ -21,9 +20,6 @@ import {
   SHORTCUT_USER_ID,
   SUPERSEDED_PASSWORDS,
   SEED_USERS,
-  SEED_SOURCES,
-  SEED_CONSULTANTS,
-  SEED_CLIENTS,
   generateSeedTenders,
 } from './seedData';
 import { can, canAccessTender, scopeTenders, hasFullAccess } from '../permissions';
@@ -53,7 +49,23 @@ export interface StatusChangePayload {
   handoverNotes?: string | null;
 }
 
-const STORAGE_KEY = 'inspire_db_v2';
+// Bumped from v2 -> v3 when the fake demo tenders were replaced by the real
+// history migrated from the master spreadsheet. This intentionally does NOT
+// fall back to the old v2 key (only v1 is treated as legacy below), so a
+// browser that already has the old fake-seeded v2 data ignores it and
+// re-seeds fresh from the real dataset instead of migrating stale demo data
+// forward.
+// Bumped again v3 -> v4 after a dedup-matching bug fix changed the seed
+// content (1,143 -> 1,156 tenders). Once a browser has ever seeded under a
+// given key, initialize() just reloads that persisted blob and never re-runs
+// generateSeedTenders() again - so any later fix to the seed data itself
+// requires a fresh key to actually reach browsers that already seeded.
+// Bumped again v4 -> v5: importedSeed.json shipped alongside the v4 change
+// was accidentally still the pre-fix 1,143-tender file (a stale copy that
+// never got refreshed after the dedup fix was made), so v4 browsers seeded
+// with the wrong data too. v5 is the first key actually paired with the
+// correct 1,156-tender dataset.
+const STORAGE_KEY = 'inspire_db_v5';
 const LEGACY_STORAGE_KEY = 'inspire_db_v1';
 
 /**
@@ -167,13 +179,14 @@ class InMemoryDatabase {
       }
     }
 
-    // Default Seed
+    // Default Seed: real tender history migrated from the master spreadsheet,
+    // plus the department roster. See generateSeedTenders() in seedData.ts.
     this.users = [...SEED_USERS];
-    this.sources = [...SEED_SOURCES];
-    this.consultants = [...SEED_CONSULTANTS];
-    this.clients = [...SEED_CLIENTS];
 
     const seedResult = generateSeedTenders();
+    this.sources = seedResult.sources;
+    this.consultants = seedResult.consultants;
+    this.clients = seedResult.clients;
     this.tenders = seedResult.tenders;
     this.awards = seedResult.awards;
     this.followUps = seedResult.followUps;
@@ -1104,250 +1117,4 @@ export const tenderRepository = {
     return { count, dueCount, breachedCount };
   },
 
-  /**
-   * Excel Batch Import Executor (Phase 6)
-   */
-  commitImportBatch(
-    currentUser: User,
-    rows: Array<{
-      tenderNumber?: number;
-      serialNo?: number;
-      fiscalYear: number;
-      clientNameRaw: string;
-      location: string;
-      region?: Region;
-      statusRaw?: string;
-      tenderAmount?: number | null;
-      targetPrice?: number | null;
-      totalAreaSqm?: number | null;
-      projectDetails?: string | null;
-      remarks?: string | null;
-      commissionNote?: string | null;
-      sourceRaw?: string | null;
-      consultantCompanyRaw?: string | null;
-      consultantEngineerRaw?: string | null;
-      consultantContactRaw?: string | null;
-      receivedAt?: Date | null;
-      submittedAt?: Date | null;
-      targetDate?: Date | null;
-      // Awarded fields if imported from Awarded sheet
-      isAwardedSheet?: boolean;
-      projectNumber?: number | null;
-      contractAmount?: number | null;
-      contractDate?: Date | null;
-    }>,
-    strategy: DuplicateStrategy = 'SKIP'
-  ): {
-    createdCount: number;
-    updatedCount: number;
-    skippedCount: number;
-    failedCount: number;
-    created: number;
-    updated: number;
-    skipped: number;
-    errors: string[];
-  } {
-    if (!can(currentUser, 'import_excel')) {
-      throw new Error('Only the Manager, Admin 1 or Admin 2 can import Excel data.');
-    }
-
-    let createdCount = 0;
-    let updatedCount = 0;
-    let skippedCount = 0;
-    let failedCount = 0;
-    const errors: string[] = [];
-
-    for (let idx = 0; idx < rows.length; idx++) {
-      const row = rows[idx];
-      try {
-        if (!row.clientNameRaw || !row.clientNameRaw.trim()) {
-          skippedCount++;
-          continue;
-        }
-
-        // 1. Resolve source
-        let sourceId: string | null = null;
-        if (row.sourceRaw) {
-          const normSource = normalizeSourceName(row.sourceRaw);
-          let foundSrc = db.sources.find((s) => s.name.toLowerCase() === normSource.canonicalName.toLowerCase());
-          if (!foundSrc) {
-            foundSrc = {
-              id: `src_imp_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-              name: normSource.canonicalName,
-              kind: normSource.kind,
-              isActive: true,
-              aliases: [row.sourceRaw],
-            };
-            db.sources.push(foundSrc);
-          }
-          sourceId = foundSrc.id;
-        }
-
-        // 2. Resolve consultant
-        let consultantId: string | null = null;
-        if (row.consultantCompanyRaw) {
-          const cleanCo = row.consultantCompanyRaw.trim();
-          let foundCons = db.consultants.find((c) => c.companyName.toLowerCase() === cleanCo.toLowerCase());
-          if (!foundCons) {
-            foundCons = {
-              id: `cons_imp_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-              companyName: cleanCo,
-              engineerName: row.consultantEngineerRaw || null,
-              contactNumber: row.consultantContactRaw || null,
-              region: row.region || 'ABU_DHABI',
-            };
-            db.consultants.push(foundCons);
-          }
-          consultantId = foundCons.id;
-        }
-
-        // 3. Resolve status
-        const normStatus = normalizeStatus(row.statusRaw);
-        const finalStatus = row.isAwardedSheet ? 'AWARDED' : normStatus.status;
-        const finalRegion: Region = row.region || normStatus.region || 'ABU_DHABI';
-
-        // 4. Deduplication rule:
-        // Match by tenderNumber if given; else by (fiscalYear, serialNo); else fuzzy (client, location, amount)
-        let existing: Tender | undefined;
-        if (row.tenderNumber) {
-          existing = db.tenders.find((t) => !t.deletedAt && t.tenderNumber === row.tenderNumber);
-        }
-        if (!existing && row.serialNo && row.fiscalYear) {
-          existing = db.tenders.find(
-            (t) => !t.deletedAt && t.fiscalYear === row.fiscalYear && t.serialNo === row.serialNo
-          );
-        }
-        if (!existing && row.clientNameRaw && row.location) {
-          existing = db.tenders.find(
-            (t) =>
-              !t.deletedAt &&
-              t.clientNameRaw.toLowerCase() === row.clientNameRaw.toLowerCase() &&
-              t.location.toLowerCase() === normalizeLocation(row.location).toLowerCase() &&
-              t.fiscalYear === row.fiscalYear
-          );
-        }
-
-        // Handle amounts of 0 as null (Test requirement: "Amounts of 0 mean 'not quoted', not 'free' — import as null")
-        const amountFils = row.tenderAmount && row.tenderAmount > 0 ? toFils(row.tenderAmount) : null;
-        const targetFils = row.targetPrice && row.targetPrice > 0 ? toFils(row.targetPrice) : null;
-
-        if (existing) {
-          if (strategy === 'SKIP') {
-            skippedCount++;
-            continue;
-          }
-
-          if (strategy === 'REVISION') {
-            const revCount = db.tenders.filter((t) => t.tenderNumber === existing!.tenderNumber).length;
-            const revTender: Tender = {
-              ...existing,
-              id: `tnd_imp_rev_${Date.now()}_${existing.tenderNumber}_${revCount}`,
-              revision: `Rev ${revCount}`,
-              status: finalStatus,
-              tenderAmount: amountFils || existing.tenderAmount,
-              targetPrice: targetFils || existing.targetPrice,
-              totalAreaSqm: row.totalAreaSqm && row.totalAreaSqm > 0 ? row.totalAreaSqm : existing.totalAreaSqm,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            db.tenders.push(revTender);
-            createdCount++;
-            continue;
-          }
-
-          // Update existing tender (OVERWRITE)
-          existing.status = finalStatus;
-          if (amountFils) existing.tenderAmount = amountFils;
-          if (row.totalAreaSqm && row.totalAreaSqm > 0) existing.totalAreaSqm = row.totalAreaSqm;
-          if (consultantId) existing.consultantId = consultantId;
-          if (sourceId) existing.sourceId = sourceId;
-
-          // If from Awarded sheet, attach/update Award record
-          if (row.isAwardedSheet || finalStatus === 'AWARDED') {
-            const pNo = row.projectNumber || this.getNextProjectNumber();
-            const cAmt = row.contractAmount ? toFils(row.contractAmount)! : amountFils || toFils(2000000)!;
-            const existingAward = db.awards.find((a) => a.tenderId === existing!.id);
-            if (existingAward) {
-              existingAward.projectNumber = pNo;
-              existingAward.contractAmount = cAmt;
-              if (row.contractDate) existingAward.contractDate = row.contractDate.toISOString();
-            } else {
-              db.awards.push({
-                id: `awd_imp_${Date.now()}_${pNo}`,
-                tenderId: existing.id,
-                projectNumber: pNo,
-                contractAmount: cAmt,
-                contractDate: row.contractDate ? row.contractDate.toISOString() : new Date().toISOString(),
-                createdAt: new Date().toISOString(),
-              });
-            }
-          }
-
-          updatedCount++;
-        } else {
-          // Create new tender
-          const tNo = row.tenderNumber || this.getNextTenderNumber();
-          const newTender: Tender = {
-            id: `tnd_imp_${Date.now()}_${tNo}`,
-            tenderNumber: tNo,
-            serialNo: row.serialNo || null,
-            fiscalYear: row.fiscalYear,
-            revision: 'Initial',
-            clientNameRaw: row.clientNameRaw.trim(),
-            location: normalizeLocation(row.location),
-            region: finalRegion,
-            status: finalStatus,
-            statusUpdatedAt: (row.submittedAt || new Date()).toISOString(),
-            tenderAmount: amountFils,
-            targetPrice: targetFils,
-            totalAreaSqm: row.totalAreaSqm && row.totalAreaSqm > 0 ? row.totalAreaSqm : null,
-            projectDetails: row.projectDetails || null,
-            remarks: row.remarks || null,
-            commissionNote: row.commissionNote || null,
-            sourceId,
-            sourceRaw: row.sourceRaw || null,
-            ownerId: currentUser.id,
-            consultantId,
-            receivedAt: (row.receivedAt || new Date()).toISOString(),
-            submittedAt: row.submittedAt ? row.submittedAt.toISOString() : null,
-            targetDate: row.targetDate ? row.targetDate.toISOString() : null,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-
-          db.tenders.push(newTender);
-
-          if (row.isAwardedSheet || finalStatus === 'AWARDED') {
-            const pNo = row.projectNumber || this.getNextProjectNumber();
-            const cAmt = row.contractAmount ? toFils(row.contractAmount)! : amountFils || toFils(2000000)!;
-            db.awards.push({
-              id: `awd_imp_${Date.now()}_${pNo}`,
-              tenderId: newTender.id,
-              projectNumber: pNo,
-              contractAmount: cAmt,
-              contractDate: row.contractDate ? row.contractDate.toISOString() : new Date().toISOString(),
-              createdAt: new Date().toISOString(),
-            });
-          }
-
-          createdCount++;
-        }
-      } catch (err: any) {
-        failedCount++;
-        errors.push(`Row ${idx + 1} (${row.clientNameRaw || 'Unknown'}): ${err.message}`);
-      }
-    }
-
-    db.persist();
-    return {
-      createdCount,
-      updatedCount,
-      skippedCount,
-      failedCount,
-      created: createdCount,
-      updated: updatedCount,
-      skipped: skippedCount,
-      errors,
-    };
-  },
 };
