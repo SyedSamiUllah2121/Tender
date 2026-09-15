@@ -21,6 +21,7 @@ import {
   SUPERSEDED_PASSWORDS,
   SEED_USERS,
   generateSeedTenders,
+  SEED_STAMP,
 } from './seedData';
 import { can, canAccessTender, scopeTenders, hasFullAccess } from '../permissions';
 import {
@@ -148,8 +149,18 @@ class InMemoryDatabase {
       try {
         const fromCurrent = localStorage.getItem(STORAGE_KEY);
         const saved = fromCurrent || localStorage.getItem(LEGACY_STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
+        const parsed = saved ? JSON.parse(saved) : null;
+
+        // A snapshot taken against a different dataset is discarded: the
+        // shipped data wins, otherwise a browser that has seeded once keeps
+        // its stale copy forever and never sees re-imported records.
+        const staleDataset = parsed !== null && parsed.seedStamp !== SEED_STAMP;
+        if (staleDataset) {
+          localStorage.removeItem(STORAGE_KEY);
+          localStorage.removeItem(LEGACY_STORAGE_KEY);
+        }
+
+        if (parsed && !staleDataset) {
           this.users = migrateUsers(parsed.users || []);
           this.sources = parsed.sources || [];
           this.consultants = parsed.consultants || [];
@@ -201,6 +212,7 @@ class InMemoryDatabase {
     if (typeof window !== 'undefined') {
       try {
         const serializable = {
+          seedStamp: SEED_STAMP,
           users: this.users,
           sources: this.sources,
           consultants: this.consultants,

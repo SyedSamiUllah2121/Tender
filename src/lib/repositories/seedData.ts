@@ -278,6 +278,25 @@ interface ImportedSeedJson {
 
 const IMPORTED_SEED = importedSeedRaw as unknown as ImportedSeedJson;
 
+/**
+ * Identifies the dataset this build ships. A browser holding a snapshot
+ * stamped with anything else re-seeds instead of keeping its stale copy, so a
+ * data refresh reaches people who have already used the app without anyone
+ * hand-bumping the storage key.
+ *
+ * Record counts are used rather than a hash of the file, so this stays O(1)
+ * against 1.5 MB on every load. Re-importing changes them in practice; bump
+ * SEED_REVISION by hand for a change that leaves all three counts identical.
+ */
+const SEED_REVISION = 1;
+
+export const SEED_STAMP = [
+  SEED_REVISION,
+  IMPORTED_SEED.tenders.length,
+  IMPORTED_SEED.awards.length,
+  IMPORTED_SEED.consultants.length,
+].join(':');
+
 function toBigIntOrNull(v: string | null): bigint | null {
   return v === null || v === undefined ? null : BigInt(v);
 }
