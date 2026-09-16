@@ -14,6 +14,7 @@ import {
   Paperclip,
   Copy,
   FileText,
+  FileQuestion,
   ShieldAlert,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -51,16 +52,23 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
   const [fuNextDate, setFuNextDate] = useState('');
 
   // Load tender with permission checks
+  // 'looking' only until the first lookup returns, so an id that matches
+  // nothing lands on a real answer instead of a permanent loading line.
+  const [lookup, setLookup] = useState<'looking' | 'found' | 'missing'>('looking');
+
   useEffect(() => {
     const res = tenderRepository.getTenderById(currentUser, tenderId);
     if (res.status === 403) {
       setAccessDenied(true);
       setTender(null);
+      setLookup('found');
     } else if (res.tender) {
       setAccessDenied(false);
       setTender(res.tender);
+      setLookup('found');
     } else {
       setTender(null);
+      setLookup('missing');
     }
   }, [currentUser, tenderId, dataVersion]);
 
@@ -86,6 +94,33 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
             className="px-4 py-2 rounded-md text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 cursor-pointer transition-colors"
           >
             Return to My Tenders Pipeline
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (lookup === 'missing') {
+    return (
+      <div className="max-w-2xl mx-auto my-12 p-8 bg-white rounded-md border border-slate-300 text-center space-y-4">
+        <div className="w-12 h-12 rounded-full bg-slate-50 text-slate-500 border border-slate-300 flex items-center justify-center mx-auto">
+          <FileQuestion className="w-6 h-6" />
+        </div>
+        <div className="inline-block px-2.5 py-0.5 rounded text-xs font-mono font-medium bg-slate-100 text-slate-600 border border-slate-300">
+          NOT FOUND
+        </div>
+        <h2 className="text-base font-bold text-slate-900">This tender is no longer in the register</h2>
+        <p className="text-xs text-slate-500 max-w-md mx-auto">
+          Nothing matches reference <span className="font-mono">{tenderId}</span>. It may have been
+          deleted, or the link may be out of date.
+        </p>
+        <div className="pt-2">
+          <button
+            type="button"
+            onClick={() => router.push('/tenders')}
+            className="px-4 py-2 rounded-md text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 cursor-pointer transition-colors"
+          >
+            Back to Tenders Pipeline
           </button>
         </div>
       </div>
@@ -490,7 +525,7 @@ export const TenderDetailView: React.FC<TenderDetailViewProps> = ({ tenderId }) 
 
                             {item.type === 'activity' && (
                               <div className="text-slate-600 mt-0.5">
-                                <span className="font-semibold text-slate-700 uppercase text-[9.5px] px-1.5 py-0.2 rounded bg-slate-100 mr-1.5">
+                                <span className="font-semibold text-slate-700 uppercase text-[9.5px] px-1.5 py-0.5 rounded bg-slate-100 mr-1.5">
                                   {item.action}
                                 </span>
                                 {item.field && (

@@ -78,10 +78,42 @@ body {
   font-feature-settings: "tnum" 1;
 }
 
+/*
+  Keyboard users need to see where they are. :focus-visible keeps the ring off
+  mouse clicks, so this costs the pointer experience nothing.
+*/
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+/* On the dark header and sidebar a brand-red ring disappears into the ground. */
+header :focus-visible,
+aside :focus-visible {
+  outline-color: #ffffff;
+}
+
 /* Subtle, minimalist scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
+}
+
+/*
+  Wide tables scroll sideways inside their card. At 5px the bar is easy to miss
+  entirely, so horizontal ones get enough weight to read as an affordance.
+*/
+.overflow-x-auto::-webkit-scrollbar {
+  height: 10px;
+}
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 8px;
+}
+.overflow-x-auto {
+  scrollbar-width: thin;
 }
 ::-webkit-scrollbar-track {
   background: transparent;

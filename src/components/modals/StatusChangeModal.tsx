@@ -7,6 +7,7 @@ import { toFils } from '../../lib/money';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
 import { useAuth } from '../../context/AuthContext';
 import { can } from '../../lib/permissions';
+import { useModalDismiss } from '../../lib/useModalDismiss';
 
 interface StatusChangeModalProps {
   tender: Tender;
@@ -44,6 +45,8 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
 
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useModalDismiss(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -116,8 +119,17 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in-50 duration-100">
-      <div className="bg-white rounded-md shadow-2xl border border-slate-300 max-w-lg w-full overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        // Only a press that lands on the backdrop itself closes the dialog, so
+        // dragging a selection out of a field cannot dismiss a part-filled form.
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in-50 duration-100"
+    >
+      <div className="bg-white rounded-md shadow-2xl border border-slate-300 max-w-lg w-full max-h-[90dvh] overflow-y-auto">
         {/* Header */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div>

@@ -58,13 +58,15 @@ const BUCKETS = [
   },
 ];
 
+type BucketKey = (typeof BUCKETS)[number]['key'];
+
 export const FollowUpsView: React.FC = () => {
   const router = useRouter();
   const { currentUser, dataVersion, refreshData } = useAuth();
   const [teamWide, setTeamWide] = useState(hasFullAccess(currentUser));
-  const [activeBucket, setActiveBucket] = useState<'breached' | 'overdue' | 'this_week' | 'upcoming'>(
-    'overdue'
-  );
+  // Null until a tab is chosen, so the view can open on whichever bucket
+  // actually holds work rather than on a fixed, often empty, one.
+  const [pickedBucket, setPickedBucket] = useState<BucketKey | null>(null);
 
   // Inline Log Form state
   const [selectedTender, setSelectedTender] = useState<Tender | null>(null);
@@ -142,6 +144,11 @@ export const FollowUpsView: React.FC = () => {
     upcoming: buckets.upcoming.length,
   };
 
+  // Open on the most urgent bucket that has anything in it; BUCKETS is already
+  // ordered by urgency. Falls back to the first tab when there is no work at all.
+  const activeBucket =
+    pickedBucket ?? BUCKETS.find((b) => counts[b.key] > 0)?.key ?? BUCKETS[0].key;
+
   const activeList =
     activeBucket === 'breached'
       ? buckets.breached
@@ -211,7 +218,7 @@ export const FollowUpsView: React.FC = () => {
             <button
               key={b.key}
               type="button"
-              onClick={() => setActiveBucket(b.key)}
+              onClick={() => setPickedBucket(b.key)}
               className={`flex items-center gap-2 px-3 py-2 -mb-px border-b-2 text-xs transition-colors cursor-pointer ${
                 on
                   ? 'border-[#8b151b] text-slate-900 font-medium'

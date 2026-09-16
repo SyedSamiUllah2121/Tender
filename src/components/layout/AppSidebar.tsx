@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import React from 'react';
-import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   FileSpreadsheet,
@@ -13,15 +14,21 @@ import {
   Briefcase,
   PlusCircle,
   ShieldAlert,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
-import { can, hasFullAccess } from '../../lib/permissions';
+import { can } from '../../lib/permissions';
 import { ACTIVE_STATUSES, isPastFollowUpWindow } from '../../lib/followUpPolicy';
 import { ROLE_LABELS, ROLE_SCOPE_NOTE } from '../../types';
 
-export const AppSidebar: React.FC = () => {
-  const router = useRouter();
+interface AppSidebarProps {
+  /** Drawer state; only meaningful below the lg breakpoint. */
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const AppSidebar: React.FC<AppSidebarProps> = ({ isOpen, onClose }) => {
   const currentPath = usePathname();
   const { currentUser } = useAuth();
 
@@ -80,7 +87,9 @@ export const AppSidebar: React.FC = () => {
     id: '/monitoring',
     label: 'Monitoring Board',
     icon: ShieldAlert,
-    badge: pastDeadline > 0 ? `${pastDeadline} past 2m` : null,
+    // Just the count: "158 past 2m" is wide enough to truncate the label itself.
+    badge: pastDeadline > 0 ? pastDeadline : null,
+    badgeTitle: `${pastDeadline} past the 2-month deadline`,
     badgeColor: 'bg-[#141414] text-white font-bold',
   };
 
@@ -108,113 +117,136 @@ export const AppSidebar: React.FC = () => {
 
   const showAdminSection = can(currentUser, 'manage_admin');
 
+  const itemClass = (active: boolean) =>
+    `w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-xs transition-colors ${
+      active
+        ? 'bg-white text-[#8b151b] font-semibold border-r-2 border-white'
+        : 'text-[#f3d3d5] hover:text-white hover:bg-[#731217] font-medium border-r-2 border-transparent'
+    }`;
+
   return (
-    <aside className="w-60 shrink-0 bg-[#8b151b] border-r border-[#5e0d12] min-h-[calc(100vh-60px)] p-3.5 flex flex-col justify-between select-none">
-      <div className="space-y-6">
-        {/* Quick Action: New Tender */}
-        {can(currentUser, 'create_tender') && (
-          <button
-            type="button"
-            onClick={() => router.push('/tenders/new')}
-            className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold text-[#8b151b] bg-white hover:bg-[#f7e7e8] transition-all cursor-pointer"
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-[#8b151b]" />
-            <span>New Tender Bid</span>
-          </button>
-        )}
+    <>
+      {/* Drawer backdrop, small screens only */}
+      <div
+        onClick={onClose}
+        aria-hidden="true"
+        className={`fixed inset-0 z-40 bg-black/60 transition-opacity lg:hidden ${
+          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      />
 
-        {/* Main Section */}
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-[#e3a9ad] px-3 mb-1.5">
-            Operations
+      <aside
+        id="app-sidebar"
+        aria-label="Primary"
+        className={`fixed top-0 left-0 z-50 h-dvh w-60 shrink-0 overflow-y-auto bg-[#8b151b] border-r border-[#5e0d12] p-3.5 flex flex-col justify-between gap-6 select-none transition-transform duration-200 lg:sticky lg:top-15 lg:z-auto lg:h-[calc(100dvh-3.75rem)] lg:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="space-y-6">
+          {/* Drawer close, small screens only */}
+          <div className="flex items-center justify-between lg:hidden">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-[#e3a9ad] px-1">
+              Menu
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close navigation"
+              className="p-1.5 rounded-md text-[#f3d3d5] hover:bg-[#731217] hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <nav className="space-y-0.5">
-            {mainNav.map((item) => {
-              const active =
-                currentPath === item.id ||
-                (item.id === '/tenders' && currentPath.startsWith('/tenders') && currentPath !== '/tenders/new');
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => router.push(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
-                    active
-                      ? 'bg-white text-[#8b151b] font-semibold border-r-2 border-white'
-                      : 'text-[#f3d3d5] hover:text-white hover:bg-[#731217] font-medium border-r-2 border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon
-                      className={`w-4 h-4 ${
-                        active ? 'text-[#8b151b]' : 'text-[#e3a9ad]'
-                      }`}
-                    />
-                    <span>{item.label}</span>
-                  </div>
-                  {item.badge !== null && item.badge !== undefined && (
-                    <span
-                      className={`text-[10.5px] font-mono px-1.5 py-0.2 rounded-md ${item.badgeColor}`}
-                    >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
 
-        {/* Admin & System Section */}
-        {showAdminSection && (
+          {/* Quick Action: New Tender */}
+          {can(currentUser, 'create_tender') && (
+            <Link
+              href="/tenders/new"
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold text-[#8b151b] bg-white hover:bg-[#f7e7e8] transition-all cursor-pointer"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-[#8b151b]" />
+              <span>New Tender Bid</span>
+            </Link>
+          )}
+
+          {/* Main Section */}
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-[#e3a9ad] px-3 mb-1.5">
-              Administration
+              Operations
             </div>
             <nav className="space-y-0.5">
-              {adminNav.map((item) => {
-                const active = currentPath === item.id;
+              {mainNav.map((item) => {
+                const active =
+                  currentPath === item.id ||
+                  (item.id === '/tenders' && currentPath.startsWith('/tenders/') && currentPath !== '/tenders/new');
                 const Icon = item.icon;
                 return (
-                  <button
+                  <Link
                     key={item.id}
-                    type="button"
-                    onClick={() => router.push(item.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-xs transition-colors cursor-pointer ${
-                      active
-                        ? 'bg-white text-[#8b151b] font-semibold border-r-2 border-white'
-                        : 'text-[#f3d3d5] hover:text-white hover:bg-[#731217] font-medium border-r-2 border-transparent'
-                    }`}
+                    href={item.id}
+                    aria-current={active ? 'page' : undefined}
+                    className={itemClass(active)}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <Icon
-                        className={`w-4 h-4 ${
-                          active ? 'text-[#8b151b]' : 'text-[#e3a9ad]'
-                        }`}
-                      />
-                      <span>{item.label}</span>
-                    </div>
-                  </button>
+                    <span className="flex items-center gap-2.5 min-w-0">
+                      <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[#8b151b]' : 'text-[#e3a9ad]'}`} />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    {item.badge !== null && item.badge !== undefined && (
+                      <span
+                        title={(item as {badgeTitle?: string}).badgeTitle}
+                        className={`shrink-0 whitespace-nowrap text-[10.5px] font-mono px-1.5 py-0.5 rounded-md ${item.badgeColor}`}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </Link>
                 );
               })}
             </nav>
           </div>
-        )}
-      </div>
 
-      {/* Role & scope box at bottom */}
-      <div className="p-3 bg-[#731217] rounded-md border border-[#a4262c] text-xs">
-        <div className="flex items-center justify-between text-[11px] font-semibold text-white">
-          <span>{ROLE_LABELS[currentUser.role]}</span>
-          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#5e0d12] border border-[#a4262c] text-white">
-            {currentUser.region === 'ALL' ? 'ALL UAE' : currentUser.region}
-          </span>
+          {/* Admin & System Section */}
+          {showAdminSection && (
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-[#e3a9ad] px-3 mb-1.5">
+                Administration
+              </div>
+              <nav className="space-y-0.5">
+                {adminNav.map((item) => {
+                  const active = currentPath === item.id;
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={item.id}
+                      aria-current={active ? 'page' : undefined}
+                      className={itemClass(active)}
+                    >
+                      <span className="flex items-center gap-2.5 min-w-0">
+                        <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-[#8b151b]' : 'text-[#e3a9ad]'}`} />
+                        <span className="truncate">{item.label}</span>
+                      </span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          )}
         </div>
-        <div className="mt-1 text-[10.5px] text-[#e3a9ad] leading-snug">
-          {ROLE_SCOPE_NOTE[currentUser.role]}
+
+        {/* Role & scope box at bottom */}
+        <div className="shrink-0 p-3 bg-[#731217] rounded-md border border-[#a4262c] text-xs">
+          <div className="flex items-center justify-between gap-2 text-[11px] font-semibold text-white">
+            <span className="truncate">{ROLE_LABELS[currentUser.role]}</span>
+            <span className="shrink-0 font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#5e0d12] border border-[#a4262c] text-white">
+              {currentUser.region === 'ALL' ? 'ALL UAE' : currentUser.region}
+            </span>
+          </div>
+          <div className="mt-1 text-[10.5px] text-[#e3a9ad] leading-snug">
+            {ROLE_SCOPE_NOTE[currentUser.role]}
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 };

@@ -62,11 +62,17 @@ export const ReportsView: React.FC = () => {
     };
 
     return Object.entries(map).map(([name, value]) => ({
+      key: name,
       name: name.replace(/_/g, ' '),
       value,
       color: colors[name] || '#b8212a',
     }));
   }, [tenders]);
+
+  // Every rejection missing a reason renders as one meaningless 100% slice.
+  const onlyUnspecified =
+    rejectReasonData.length === 1 && rejectReasonData[0].key === 'UNSPECIFIED';
+  const unspecifiedCount = onlyUnspecified ? rejectReasonData[0].value : 0;
 
   // 2. Win Rate by Size Bucket (<500 sqm, 500-1000 sqm, >1000 sqm)
   const sizeBucketData = useMemo(() => {
@@ -202,6 +208,21 @@ export const ReportsView: React.FC = () => {
           <div className="h-64 flex items-center justify-center">
             {rejectReasonData.length === 0 ? (
               <div className="text-xs text-gray-400">No rejection data recorded yet.</div>
+            ) : onlyUnspecified ? (
+              /* A single 100% "unspecified" slice tells nobody anything; say what
+                 is actually missing and how many bids it covers. */
+              <div className="max-w-xs text-center">
+                <div className="font-mono text-2xl font-bold text-slate-300">
+                  {unspecifiedCount}
+                </div>
+                <div className="mt-1.5 text-xs font-medium text-slate-600">
+                  rejected bids with no reason logged
+                </div>
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                  Record a rejection reason when moving a tender to Rejected, and the breakdown
+                  will appear here.
+                </p>
+              </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>

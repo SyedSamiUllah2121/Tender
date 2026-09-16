@@ -427,7 +427,7 @@ export const DashboardView: React.FC = () => {
           </div>
           <div className="text-2xl font-bold tracking-tight text-slate-900 mt-1 flex items-baseline gap-2 font-mono">
             <span>{kpi.awardedCount}</span>
-            <span className="text-[11px] font-medium px-1.5 py-0.2 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-300">
+            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-300">
               {kpi.winRate}% win
             </span>
           </div>

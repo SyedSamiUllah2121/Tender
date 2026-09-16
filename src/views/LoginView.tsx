@@ -43,9 +43,8 @@ const FACTS = [
 ];
 
 export const LoginView: React.FC<LoginViewProps> = ({ onSignIn }) => {
-  // Prefilled development credentials; clear these before real use.
-  const [email, setEmail] = useState('123');
-  const [password, setPassword] = useState('123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

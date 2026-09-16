@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useModalDismiss } from '../../lib/useModalDismiss';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
 import { formatAED } from '../../lib/money';
 import { StatusBadge } from '../ui/StatusBadge';
@@ -29,15 +30,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
+  // Escape to dismiss, and no scrolling the page behind the overlay.
+  useModalDismiss(isOpen, onClose);
 
   useEffect(() => {
     if (isOpen) {
@@ -81,8 +75,15 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
   ].filter((a) => !q || a.label.toLowerCase().includes(q));
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-24 bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in-50 duration-100">
-      <div className="bg-white rounded-md shadow-2xl border border-slate-300 max-w-xl w-full overflow-hidden">
+    <div
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in-50 duration-100"
+    >
+      <div className="bg-white rounded-md shadow-2xl border border-slate-300 max-w-xl w-full max-h-[80dvh] overflow-hidden flex flex-col">
         {/* Search Input */}
         <div className="p-3.5 border-b border-slate-200 flex items-center gap-3 bg-white">
           <Search className="w-4 h-4 text-slate-400" />
@@ -104,7 +105,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         </div>
 
         {/* Results */}
-        <div className="max-h-96 overflow-y-auto p-2 divide-y divide-slate-200">
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 divide-y divide-slate-200">
           {/* Quick Actions */}
           {quickActions.length > 0 && (
             <div className="py-1.5">
@@ -166,7 +167,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
                           #{t.tenderNumber}
                         </span>
                         {t.award?.projectNumber && (
-                          <span className="font-mono text-[10px] px-1.5 py-0.2 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-300">
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium border border-emerald-300">
                             PJ/{t.award.projectNumber}
                           </span>
                         )}

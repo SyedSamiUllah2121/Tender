@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   RefreshCw,
   LogOut,
+  Menu,
   SlidersHorizontal,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -19,9 +20,16 @@ import { Notification, ROLE_LABELS } from '../../types';
 
 interface AppHeaderProps {
   onOpenCommandPalette: () => void;
+  /** Opens the navigation drawer on screens too narrow for the sidebar. */
+  onToggleNav: () => void;
+  isNavOpen: boolean;
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({
+  onOpenCommandPalette,
+  onToggleNav,
+  isNavOpen,
+}) => {
   const router = useRouter();
   const { currentUser, signOut, refreshData, dataVersion } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -29,10 +37,35 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [cronRunning, setCronRunning] = useState(false);
   const [cronMessage, setCronMessage] = useState<string | null>(null);
+  const menusRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setNotifications(tenderRepository.getNotifications(currentUser));
   }, [currentUser, dataVersion]);
+
+  // A dropdown should close when you click away from it or press Escape,
+  // rather than trapping you into clicking its trigger a second time.
+  useEffect(() => {
+    if (!showNotifications && !showUserMenu) return;
+    const closeAll = () => {
+      setShowNotifications(false);
+      setShowUserMenu(false);
+    };
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      if (!menusRef.current?.contains(e.target as Node)) closeAll();
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeAll();
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showNotifications, showUserMenu]);
 
   const unreadCount = notifications.filter((n) => !n.readAt).length;
 
@@ -66,6 +99,18 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
   return (
     <header className="sticky top-0 z-40 bg-[#0d0d0d] border-b border-[#333333] text-white select-none">
       <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 h-15 flex items-center justify-between gap-4">
+        {/* Navigation drawer toggle — the sidebar is hidden below lg */}
+        <button
+          type="button"
+          onClick={onToggleNav}
+          aria-label="Toggle navigation"
+          aria-expanded={isNavOpen}
+          aria-controls="app-sidebar"
+          className="lg:hidden shrink-0 -ml-1 p-2 rounded-md text-[#d4d4d4] hover:bg-[#1f1f1f] hover:text-white border border-transparent hover:border-[#333333] transition-colors cursor-pointer"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+
         {/* Brand & Identity */}
         <div
           className="flex items-center gap-3 cursor-pointer group"
@@ -101,7 +146,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ onOpenCommandPalette }) =>
         </div>
 
         {/* Right side controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div ref={menusRef} className="flex items-center gap-2 sm:gap-3">
           {/* Follow-up Cron Automation Button */}
           <button
             type="button"
