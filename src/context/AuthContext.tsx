@@ -1,24 +1,35 @@
 'use client';
 
-import React, { createContext, useContext, useState } from 'react';
-import { User } from '../types';
+import { usePathname, useRouter } from 'next/navigation';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
-import { LoginView } from '../views/LoginView';
+import { User } from '../types';
 
 const SESSION_KEY = 'inspire_user_id';
 
-interface AuthContextType {
-  /** The signed-in person. Children only render once there is a session, so
-   *  this is never null inside the app. */
-  currentUser: User;
+/** The sign-in screen, and the screen a signed-in person lands on. */
+export const LOGIN_ROUTE = '/login';
+export const HOME_ROUTE = '/dashboard';
+
+interface SessionContextType {
+  /** Null until somebody signs in. Only the login screen should see that. */
+  session: User | null;
   allUsers: User[];
   setCurrentUser: (user: User) => void;
+  /** Returns an error message, or null when the sign-in succeeded. */
+  signIn: (email: string, password: string) => string | null;
   signOut: () => void;
   refreshData: () => void;
   dataVersion: number;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+interface AuthContextType extends SessionContextType {
+  /** The signed-in person. Guaranteed inside <RequireAuth>. */
+  currentUser: User;
+}
+
+const AuthContext = createContext<SessionContextType | undefined>(undefined);
 
 const readSession = (): User | null => {
   if (typeof window === 'undefined') return null;
@@ -58,16 +69,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSession(null);
   };
 
-  // The app tree never mounts without a session, so every screen behind this
-  // point can rely on currentUser being present.
-  if (!session) return <LoginView onSignIn={signIn} />;
-
   return (
     <AuthContext.Provider
       value={{
-        currentUser: session,
+        session,
         allUsers,
         setCurrentUser,
+        signIn,
         signOut,
         refreshData,
         dataVersion,
@@ -78,8 +86,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = (): AuthContextType => {
+/** Safe to call with nobody signed in — this is what the login screen uses. */
+export const useSession = (): SessionContextType => {
   const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
+  if (!ctx) throw new Error('useSession must be used within an AuthProvider');
   return ctx;
+};
+
+/**
+ * Sends anyone without a session to the login screen, remembering where they
+ * were headed, and holds the children back until there is one. Every screen
+ * behind it can rely on currentUser being present.
+ */
+export const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { session } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (session) return;
+    const next = pathname && pathname !== HOME_ROUTE ? `?next=${encodeURIComponent(pathname)}` : '';
+    router.replace(`${LOGIN_ROUTE}${next}`);
+  }, [session, pathname, router]);
+
+  if (!session) return <LoadingScreen message="Taking you to sign in…" />;
+
+  return <>{children}</>;
+};
+
+export const useAuth = (): AuthContextType => {
+  const ctx = useSession();
+  if (!ctx.session) {
+    throw new Error('useAuth needs a signed-in person; render the screen inside <RequireAuth>.');
+  }
+  return { ...ctx, currentUser: ctx.session };
 };

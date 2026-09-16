@@ -1,9 +1,9 @@
 'use client';
 
 import React, {useEffect, useState} from 'react';
-import {AppHeader} from '../components/layout/AppHeader';
-import {AppSidebar} from '../components/layout/AppSidebar';
-import {CommandPalette} from '../components/modals/CommandPalette';
+import {AppHeader} from '../../components/layout/AppHeader';
+import {AppSidebar} from '../../components/layout/AppSidebar';
+import {CommandPalette} from '../../components/modals/CommandPalette';
 
 export function AppShell({children}: {children: React.ReactNode}) {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);

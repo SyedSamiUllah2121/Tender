@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import {TenderFormView} from '../../../views/TenderFormView';
+import {TenderFormView} from '../../../../views/TenderFormView';
 
 export const metadata: Metadata = {title: 'New Tender Bid'};
 

@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import {FollowUpsView} from '../../views/FollowUpsView';
+import {FollowUpsView} from '../../../views/FollowUpsView';
 
 export const metadata: Metadata = {title: 'Follow-ups Worklist'};
 

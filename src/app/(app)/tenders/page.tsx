@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import {TendersView} from '../../views/TendersView';
+import {TendersView} from '../../../views/TendersView';
 
 export const metadata: Metadata = {title: 'Tenders Pipeline'};
 

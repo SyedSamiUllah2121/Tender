@@ -1,7 +1,6 @@
 import type {Metadata} from 'next';
 import {JetBrains_Mono, Plus_Jakarta_Sans} from 'next/font/google';
 import React from 'react';
-import {AppShell} from './app-shell';
 import './globals.css';
 import {Providers} from './providers';
 
@@ -46,9 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${jakarta.variable} ${jetbrainsMono.variable}`}>
-        <Providers>
-          <AppShell>{children}</AppShell>
-        </Providers>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

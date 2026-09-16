@@ -1,5 +1,5 @@
 import type {Metadata} from 'next';
-import {AdminConsultantsView} from '../../../views/AdminConsultantsView';
+import {AdminConsultantsView} from '../../../../views/AdminConsultantsView';
 
 export const metadata: Metadata = {title: 'Consultants Directory'};
 
