@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Building, PlusCircle, Phone, Mail, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
@@ -11,6 +11,20 @@ export const AdminConsultantsView: React.FC = () => {
   const { currentUser, dataVersion, refreshData } = useAuth();
   const allowed = can(currentUser, 'manage_admin');
   const consultants = tenderRepository.getConsultants();
+
+  // Tender counts per consultant, so the directory shows how much work each
+  // consultancy actually brings and how it converts.
+  const tallyByConsultant = useMemo(() => {
+    const tally: Record<string, { total: number; awarded: number; rejected: number }> = {};
+    for (const t of tenderRepository.getTenders(currentUser)) {
+      if (!t.consultantId) continue;
+      const row = (tally[t.consultantId] ??= { total: 0, awarded: 0, rejected: 0 });
+      row.total++;
+      if (t.status === 'AWARDED') row.awarded++;
+      else if (t.status === 'REJECTED') row.rejected++;
+    }
+    return tally;
+  }, [currentUser, dataVersion]);
 
   const [showModal, setShowModal] = useState(false);
   const [companyName, setCompanyName] = useState('');
@@ -62,37 +76,48 @@ export const AdminConsultantsView: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="border-b border-slate-300 bg-gray-50 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
-              <th className="p-3">Consultant Company</th>
-              <th className="p-3">Lead Project Engineer</th>
-              <th className="p-3">Contact Phone</th>
-              <th className="p-3">Email</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {consultants.map((c) => (
-              <tr key={c.id} className="hover:bg-gray-50">
-                <td className="p-3 font-bold text-gray-900">{c.companyName}</td>
-                <td className="p-3 text-gray-700">{c.engineerName || '—'}</td>
-                <td className="p-3 font-mono text-gray-600">
-                  {c.contactNumber ? (
-                    <a
-                      href={`tel:${c.contactNumber}`}
-                      className="text-[var(--red-700)] hover:underline"
-                    >
-                      {c.contactNumber}
-                    </a>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td className="p-3 text-gray-600">{c.email || '—'}</td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-slate-300 bg-gray-50 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
+                <th className="p-3">Consultant Company</th>
+                <th className="p-3 text-center">Total Tenders</th>
+                <th className="p-3 text-center">Awarded Tenders</th>
+                <th className="p-3 text-center">Rejected Tenders</th>
+                <th className="p-3">Contact Phone</th>
+                <th className="p-3">Email</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {consultants.map((c) => {
+                const tally = tallyByConsultant[c.id] ?? { total: 0, awarded: 0, rejected: 0 };
+                return (
+                  <tr key={c.id} className="hover:bg-gray-50">
+                    <td className="p-3 font-bold text-gray-900">{c.companyName}</td>
+                    <td className="p-3 text-center font-mono text-gray-800">{tally.total}</td>
+                    <td className="p-3 text-center font-mono font-bold text-emerald-800">
+                      {tally.awarded}
+                    </td>
+                    <td className="p-3 text-center font-mono text-red-700">{tally.rejected}</td>
+                    <td className="p-3 font-mono text-gray-600">
+                      {c.contactNumber ? (
+                        <a
+                          href={`tel:${c.contactNumber}`}
+                          className="text-[var(--red-700)] hover:underline"
+                        >
+                          {c.contactNumber}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="p-3 text-gray-600">{c.email || '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {showModal && (
