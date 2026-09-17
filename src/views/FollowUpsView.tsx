@@ -64,6 +64,10 @@ export const FollowUpsView: React.FC = () => {
   const router = useRouter();
   const { currentUser, dataVersion, refreshData } = useAuth();
   const [teamWide, setTeamWide] = useState(hasFullAccess(currentUser));
+  // Filter by the names a worklist row actually carries: the client being
+  // chased and the owner chasing them.
+  const [selectedClient, setSelectedClient] = useState<string>('ALL');
+  const [selectedOwner, setSelectedOwner] = useState<string>('ALL');
   // Null until a tab is chosen, so the view can open on whichever bucket
   // actually holds work rather than on a fixed, often empty, one.
   const [pickedBucket, setPickedBucket] = useState<BucketKey | null>(null);
@@ -84,7 +88,7 @@ export const FollowUpsView: React.FC = () => {
   const weekFromNow = new Date(now.getTime() + 7 * 86400000);
 
   // Load tenders requiring follow-up
-  const tenders = useMemo(() => {
+  const worklist = useMemo(() => {
     let list = tenderRepository.getTenders(currentUser);
     // Active pipeline only
     list = list.filter(
@@ -98,6 +102,37 @@ export const FollowUpsView: React.FC = () => {
     }
     return list;
   }, [currentUser, dataVersion, teamWide]);
+
+  // Name options come from the worklist itself, so the dropdowns only ever offer
+  // names that have something to chase.
+  const clientOptions = useMemo(() => {
+    const names = new Set<string>();
+    worklist.forEach((t) => names.add(t.clientNameRaw));
+    // Toggling the team view can drop the chosen name; keep it listed so the
+    // select shows what is actually filtering rather than going blank.
+    if (selectedClient !== 'ALL') names.add(selectedClient);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [worklist, selectedClient]);
+
+  const ownerOptions = useMemo(() => {
+    const names = new Set<string>();
+    worklist.forEach((t) => names.add(t.owner?.name || 'Unassigned'));
+    if (selectedOwner !== 'ALL') names.add(selectedOwner);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [worklist, selectedOwner]);
+
+  const nameFilterOn = selectedClient !== 'ALL' || selectedOwner !== 'ALL';
+
+  const tenders = useMemo(() => {
+    let list = worklist;
+    if (selectedClient !== 'ALL') {
+      list = list.filter((t) => t.clientNameRaw === selectedClient);
+    }
+    if (selectedOwner !== 'ALL') {
+      list = list.filter((t) => (t.owner?.name || 'Unassigned') === selectedOwner);
+    }
+    return list;
+  }, [worklist, selectedClient, selectedOwner]);
 
   // Buckets
   const buckets = useMemo(() => {
@@ -197,17 +232,68 @@ export const FollowUpsView: React.FC = () => {
           </p>
         </div>
 
-        {hasFullAccess(currentUser) && (
-          <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-md border border-slate-300 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={teamWide}
-              onChange={(e) => setTeamWide(e.target.checked)}
-              className="rounded text-[#8b151b] focus:ring-[#8b151b]"
-            />
-            <span>Show Entire Team Worklist</span>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Client
+            </span>
+            <select
+              value={selectedClient}
+              onChange={(e) => setSelectedClient(e.target.value)}
+              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium max-w-[15rem]"
+            >
+              <option value="ALL">All Clients</option>
+              {clientOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
           </label>
-        )}
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Owner
+            </span>
+            <select
+              value={selectedOwner}
+              onChange={(e) => setSelectedOwner(e.target.value)}
+              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium max-w-[12rem]"
+            >
+              <option value="ALL">All Owners</option>
+              {ownerOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {nameFilterOn && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedClient('ALL');
+                setSelectedOwner('ALL');
+              }}
+              className="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600 bg-white border border-slate-300 hover:bg-gray-50 cursor-pointer"
+            >
+              Clear names
+            </button>
+          )}
+
+          {hasFullAccess(currentUser) && (
+            <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-md border border-slate-300 cursor-pointer whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={teamWide}
+                onChange={(e) => setTeamWide(e.target.checked)}
+                className="rounded text-[#8b151b] focus:ring-[#8b151b]"
+              />
+              <span>Show Entire Team Worklist</span>
+            </label>
+          )}
+        </div>
       </div>
 
       {/* Buckets, as tabs over the list below */}
@@ -241,7 +327,9 @@ export const FollowUpsView: React.FC = () => {
       <div className="bg-white rounded-md border border-[var(--border)] divide-y divide-slate-200">
         {activeList.length === 0 ? (
           <div className="p-12 text-center text-xs text-gray-400">
-            No tenders in this follow-up category.
+            {nameFilterOn
+              ? 'No tenders in this follow-up category for the selected name.'
+              : 'No tenders in this follow-up category.'}
           </div>
         ) : (
           activeList.map((tender) => {

@@ -31,14 +31,51 @@ import { fromFils, formatAED } from '../lib/money';
 export const ReportsView: React.FC = () => {
   const { currentUser, dataVersion } = useAuth();
   const [selectedYear, setSelectedYear] = useState<string>('ALL');
+  // Filter by the names this report is about: the consultancy whose efficacy is
+  // ranked, and the owner whose performance is being reviewed.
+  const [selectedConsultant, setSelectedConsultant] = useState<string>('ALL');
+  const [selectedOwner, setSelectedOwner] = useState<string>('ALL');
+
+  const NO_CONSULTANT = 'Direct / No Consultant';
+
+  // Everything in scope for the chosen year, before the name filters. The name
+  // dropdowns are built from this, so they only ever offer names that exist.
+  const yearTenders = useMemo(() => {
+    const list = tenderRepository.getTenders(currentUser);
+    if (selectedYear === 'ALL') return list;
+    return list.filter((t) => t.fiscalYear === parseInt(selectedYear, 10));
+  }, [currentUser, dataVersion, selectedYear]);
+
+  const consultantOptions = useMemo(() => {
+    const names = new Set<string>();
+    yearTenders.forEach((t) => names.add(t.consultant?.companyName || NO_CONSULTANT));
+    // A year change can drop the chosen name; keep it listed so the select shows
+    // what is actually filtering rather than going blank.
+    if (selectedConsultant !== 'ALL') names.add(selectedConsultant);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [yearTenders, selectedConsultant]);
+
+  const ownerOptions = useMemo(() => {
+    const names = new Set<string>();
+    yearTenders.forEach((t) => names.add(t.owner?.name || 'Unassigned'));
+    if (selectedOwner !== 'ALL') names.add(selectedOwner);
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [yearTenders, selectedOwner]);
 
   const tenders = useMemo(() => {
-    let list = tenderRepository.getTenders(currentUser);
-    if (selectedYear !== 'ALL') {
-      list = list.filter((t) => t.fiscalYear === parseInt(selectedYear, 10));
+    let list = yearTenders;
+    if (selectedConsultant !== 'ALL') {
+      list = list.filter(
+        (t) => (t.consultant?.companyName || NO_CONSULTANT) === selectedConsultant
+      );
+    }
+    if (selectedOwner !== 'ALL') {
+      list = list.filter((t) => (t.owner?.name || 'Unassigned') === selectedOwner);
     }
     return list;
-  }, [currentUser, dataVersion, selectedYear]);
+  }, [yearTenders, selectedConsultant, selectedOwner]);
+
+  const nameFilterOn = selectedConsultant !== 'ALL' || selectedOwner !== 'ALL';
 
   // 1. Lost Tenders Breakdown by Reject Reason
   const rejectReasonData = useMemo(() => {
@@ -162,19 +199,82 @@ export const ReportsView: React.FC = () => {
           <p className="text-xs text-slate-500">
             Win rates by consultant, price per square metre, and rejection reasons.
           </p>
+          {nameFilterOn && (
+            <p className="text-[11px] font-medium text-[#8b151b] mt-0.5">
+              Filtered to{' '}
+              {selectedConsultant !== 'ALL' && <strong>{selectedConsultant}</strong>}
+              {selectedConsultant !== 'ALL' && selectedOwner !== 'ALL' && ' · '}
+              {selectedOwner !== 'ALL' && <strong>{selectedOwner}</strong>} — {tenders.length}{' '}
+              tender{tenders.length === 1 ? '' : 's'}.
+            </p>
+          )}
         </div>
 
-        <div className="flex items-center gap-3">
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(e.target.value)}
-            className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium"
-          >
-            <option value="ALL">All Fiscal Years</option>
-            <option value="2026">2026</option>
-            <option value="2025">2025</option>
-            <option value="2024">2024</option>
-          </select>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Consultant
+            </span>
+            <select
+              value={selectedConsultant}
+              onChange={(e) => setSelectedConsultant(e.target.value)}
+              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium max-w-[15rem]"
+            >
+              <option value="ALL">All Consultants</option>
+              {consultantOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Owner
+            </span>
+            <select
+              value={selectedOwner}
+              onChange={(e) => setSelectedOwner(e.target.value)}
+              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium max-w-[12rem]"
+            >
+              <option value="ALL">All Owners</option>
+              {ownerOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Fiscal Year
+            </span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium"
+            >
+              <option value="ALL">All Fiscal Years</option>
+              <option value="2026">2026</option>
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+            </select>
+          </label>
+
+          {nameFilterOn && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedConsultant('ALL');
+                setSelectedOwner('ALL');
+              }}
+              className="px-3 py-1.5 rounded-md text-xs font-semibold text-slate-600 bg-white border border-slate-300 hover:bg-gray-50 cursor-pointer"
+            >
+              Clear names
+            </button>
+          )}
 
           <button
             type="button"
@@ -304,6 +404,13 @@ export const ReportsView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200">
+              {consultantData.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-10 text-center text-gray-400">
+                    No tenders match this filter.
+                  </td>
+                </tr>
+              )}
               {consultantData.map((c) => (
                 <tr key={c.name} className="hover:bg-gray-50">
                   <td className="p-2.5 font-bold text-gray-800">{c.name}</td>
