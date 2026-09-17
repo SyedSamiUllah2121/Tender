@@ -45,7 +45,17 @@ export const AwardedView: React.FC = () => {
     if (yearFilter !== 'ALL') {
       list = list.filter((t) => t.fiscalYear === parseInt(yearFilter, 10));
     }
-    return list.sort((a, b) => (b.award?.projectNumber || 0) - (a.award?.projectNumber || 0));
+    // Newest projects first, keyed on the date the tender came in — the one date
+    // every project really has. Two other keys look tempting and both mislead:
+    // project numbers are not chronological (they track the received date barely
+    // better than chance), and an award saved without a contract date is stamped
+    // with the save time (see createAward), which would float old undated
+    // projects to the top. Project number breaks ties as the latest added.
+    return [...list].sort((a, b) => {
+      const byDate = Date.parse(b.receivedAt) - Date.parse(a.receivedAt);
+      if (byDate !== 0 && !Number.isNaN(byDate)) return byDate;
+      return (b.award?.projectNumber || 0) - (a.award?.projectNumber || 0);
+    });
   }, [awardedTenders, search, yearFilter]);
 
   // Totals

@@ -10,6 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
   FileSpreadsheet,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -35,8 +37,10 @@ export const TendersView: React.FC = () => {
   const [selectedConsultant, setSelectedConsultant] = useState<string>('ALL');
   const [valueRange, setValueRange] = useState<string>('ALL');
 
-  // Sorting & Pagination
-  const [sortField, setSortField] = useState<keyof Tender>('tenderNumber');
+  // Sorting & Pagination. The pipeline opens on the newest work: most recently
+  // received first, and within the same date the highest tender number, which is
+  // the most recently added.
+  const [sortField, setSortField] = useState<keyof Tender>('receivedAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(1);
   const pageSize = 15;
@@ -141,7 +145,9 @@ export const TendersView: React.FC = () => {
 
       if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
       if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
+      // Tenders often share a received date, so fall back to the newest added
+      // rather than leaving same-date rows in arbitrary order.
+      return b.tenderNumber - a.tenderNumber;
     });
   }, [
     rawTenders,
@@ -164,13 +170,46 @@ export const TendersView: React.FC = () => {
     return filteredTenders.slice(start, start + pageSize);
   }, [filteredTenders, page, pageSize]);
 
+  // Header cell for a sortable column: shows which column drives the current
+  // order and in which direction, so the default (newest received) is legible.
+  const sortHeader = (
+    field: keyof Tender,
+    label: string,
+    align: 'left' | 'right' = 'left'
+  ) => {
+    const active = sortField === field;
+    return (
+      <th
+        onClick={() => toggleSort(field)}
+        aria-sort={active ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+        className={`p-2.5 cursor-pointer whitespace-nowrap hover:text-slate-900 ${
+          active ? 'text-slate-900' : ''
+        } ${align === 'right' ? 'text-right' : ''}`}
+      >
+        <div className={`flex items-center gap-1 ${align === 'right' ? 'justify-end' : ''}`}>
+          <span>{label}</span>
+          {active ? (
+            sortDirection === 'asc' ? (
+              <ArrowUp className="w-3 h-3 text-slate-900" />
+            ) : (
+              <ArrowDown className="w-3 h-3 text-slate-900" />
+            )
+          ) : (
+            <ArrowUpDown className="w-3 h-3 text-slate-400" />
+          )}
+        </div>
+      </th>
+    );
+  };
+
   // Toggle sort direction
   const toggleSort = (field: keyof Tender) => {
     if (sortField === field) {
       setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
     } else {
       setSortField(field);
-      setSortDirection('asc');
+      // Dates and amounts are read newest/largest first; names read A-Z.
+      setSortDirection(field === 'clientNameRaw' || field === 'location' ? 'asc' : 'desc');
     }
   };
 
@@ -567,37 +606,14 @@ export const TendersView: React.FC = () => {
                     className="rounded text-slate-900 focus:ring-slate-900 border-slate-300"
                   />
                 </th>
-                <th
-                  onClick={() => toggleSort('tenderNumber')}
-                  className="p-2.5 cursor-pointer hover:text-slate-900 whitespace-nowrap"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Tender No</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                  </div>
-                </th>
+                {sortHeader('tenderNumber', 'Tender No')}
+                {sortHeader('receivedAt', 'Received')}
                 <th className="p-2.5 whitespace-nowrap">PJ / Award</th>
-                <th
-                  onClick={() => toggleSort('clientNameRaw')}
-                  className="p-2.5 cursor-pointer hover:text-slate-900"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Client Name</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                  </div>
-                </th>
+                {sortHeader('clientNameRaw', 'Client Name')}
                 <th className="p-2.5">Location</th>
                 <th className="p-2.5">Source</th>
                 <th className="p-2.5">Owner</th>
-                <th
-                  onClick={() => toggleSort('tenderAmount')}
-                  className="p-2.5 text-right cursor-pointer hover:text-slate-900"
-                >
-                  <div className="flex items-center justify-end gap-1">
-                    <span>Tender Value</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                  </div>
-                </th>
+                {sortHeader('tenderAmount', 'Tender Value', 'right')}
                 <th className="p-2.5 text-right">Area (m²)</th>
                 <th className="p-2.5 text-right whitespace-nowrap">AED / m²</th>
                 <th className="p-2.5 text-center">Status</th>
@@ -608,7 +624,7 @@ export const TendersView: React.FC = () => {
             <tbody className="divide-y divide-slate-200 text-slate-900">
               {paginatedTenders.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="p-12 text-center text-slate-400">
+                  <td colSpan={14} className="p-12 text-center text-slate-400">
                     No tenders match the selected filters or search criteria.
                   </td>
                 </tr>
@@ -656,6 +672,11 @@ export const TendersView: React.FC = () => {
                             ({tender.revision})
                           </span>
                         )}
+                      </td>
+
+                      {/* Received */}
+                      <td className="p-2.5 font-mono text-slate-600 whitespace-nowrap">
+                        {tender.receivedAt ? tender.receivedAt.substring(0, 10) : '—'}
                       </td>
 
                       {/* Project No / Award */}
