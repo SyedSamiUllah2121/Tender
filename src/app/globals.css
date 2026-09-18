@@ -87,8 +87,8 @@ body {
   outline-offset: 2px;
   border-radius: 4px;
 }
-/* On the dark header and sidebar a brand-red ring disappears into the ground. */
-header :focus-visible,
+/* On brand-red ground a brand-red ring disappears; the white header bar keeps the default. */
+.on-brand :focus-visible,
 aside :focus-visible {
   outline-color: #ffffff;
 }

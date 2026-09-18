@@ -12,7 +12,6 @@ import {
   Users,
   GitFork,
   Briefcase,
-  PlusCircle,
   ShieldAlert,
   X,
 } from 'lucide-react';
@@ -138,7 +137,7 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ isOpen, onClose }) => {
       <aside
         id="app-sidebar"
         aria-label="Primary"
-        className={`fixed top-0 left-0 z-50 h-dvh w-60 shrink-0 overflow-y-auto bg-[#8b151b] border-r border-[#5e0d12] p-3.5 flex flex-col justify-between gap-6 select-none transition-transform duration-200 lg:sticky lg:top-15 lg:z-auto lg:h-[calc(100dvh-3.75rem)] lg:translate-x-0 ${
+        className={`fixed top-0 left-0 z-50 h-dvh w-60 shrink-0 overflow-y-auto bg-[#8b151b] border-r border-[#5e0d12] p-3.5 flex flex-col justify-between gap-6 select-none transition-transform duration-200 lg:sticky lg:top-24 lg:z-auto lg:h-[calc(100dvh-6rem)] lg:translate-x-0 ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -157,17 +156,6 @@ export const AppSidebar: React.FC<AppSidebarProps> = ({ isOpen, onClose }) => {
               <X className="w-4 h-4" />
             </button>
           </div>
-
-          {/* Quick Action: New Tender */}
-          {can(currentUser, 'create_tender') && (
-            <Link
-              href="/tenders/new"
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold text-[#8b151b] bg-white hover:bg-[#f7e7e8] transition-all cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5 text-[#8b151b]" />
-              <span>New Tender Bid</span>
-            </Link>
-          )}
 
           {/* Main Section */}
           <div>

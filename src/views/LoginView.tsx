@@ -28,7 +28,7 @@ interface LoginViewProps {
  */
 const Logo: React.FC<{ className?: string }> = ({ className = '' }) => (
   <img
-    src="/logo.png"
+    src="/logo-full.png"
     alt="Inspire Builders"
     width={930}
     height={260}
