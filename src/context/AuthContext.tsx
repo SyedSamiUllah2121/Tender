@@ -1,6 +1,6 @@
 'use client';
 
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
@@ -94,20 +94,19 @@ export const useSession = (): SessionContextType => {
 };
 
 /**
- * Sends anyone without a session to the login screen, remembering where they
- * were headed, and holds the children back until there is one. Every screen
- * behind it can rely on currentUser being present.
+ * Sends anyone without a session to the login screen, and holds the children
+ * back until there is one. Every screen behind it can rely on currentUser
+ * being present. Signing in always opens the dashboard, so where someone was
+ * headed is deliberately not carried across.
  */
 export const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { session } = useSession();
   const router = useRouter();
-  const pathname = usePathname();
 
   useEffect(() => {
     if (session) return;
-    const next = pathname && pathname !== HOME_ROUTE ? `?next=${encodeURIComponent(pathname)}` : '';
-    router.replace(`${LOGIN_ROUTE}${next}`);
-  }, [session, pathname, router]);
+    router.replace(LOGIN_ROUTE);
+  }, [session, router]);
 
   if (!session) return <LoadingScreen message="Taking you to sign in…" />;
 
