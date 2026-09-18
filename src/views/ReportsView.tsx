@@ -185,7 +185,19 @@ export const ReportsView: React.FC = () => {
     const wsSize = XLSX.utils.json_to_sheet(sizeBucketData);
     XLSX.utils.book_append_sheet(wb, wsSize, 'SizeBuckets');
 
-    XLSX.writeFile(wb, `Inspire_Commercial_Analytics_${new Date().toISOString().substring(0, 10)}.xlsx`);
+    /*
+      Two exports taken under different filters are indistinguishable once they
+      are sitting in someone's Downloads folder, so whatever narrowed this
+      workbook goes into its name.
+    */
+    const slug = (s: string) => s.replace(/[^\w]+/g, '-').replace(/^-+|-+$/g, '');
+    const parts = ['Inspire_Commercial_Analytics'];
+    if (selectedOwner !== 'ALL') parts.push(slug(selectedOwner));
+    if (selectedConsultant !== 'ALL') parts.push(slug(selectedConsultant));
+    if (selectedYear !== 'ALL') parts.push(slug(selectedYear));
+    parts.push(new Date().toISOString().substring(0, 10));
+
+    XLSX.writeFile(wb, `${parts.join('_')}.xlsx`);
   };
 
   return (
