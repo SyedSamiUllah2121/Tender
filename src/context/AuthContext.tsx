@@ -31,9 +31,55 @@ interface AuthContextType extends SessionContextType {
 
 const AuthContext = createContext<SessionContextType | undefined>(undefined);
 
+/*
+  The session lives in sessionStorage rather than localStorage, so it ends
+  when the browser closes and the next visit has to sign in again. A refresh
+  or a move between screens keeps it, because the tab is the same one.
+
+  Storage throws outright rather than returning null in private mode and
+  wherever site data is blocked, so every access is guarded. A session that
+  cannot be written still works until the tab closes.
+*/
+const sessionStore = {
+  read(): string | null {
+    try {
+      return window.sessionStorage.getItem(SESSION_KEY);
+    } catch {
+      return null;
+    }
+  },
+  write(id: string) {
+    try {
+      window.sessionStorage.setItem(SESSION_KEY, id);
+    } catch {
+      /* Nothing to do; the session is held in memory either way. */
+    }
+  },
+  clear() {
+    try {
+      window.sessionStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* Nothing to forget. */
+    }
+  },
+  /*
+    Sessions used to be kept in localStorage, which never expires, so anyone
+    who signed in once was never asked again. Their key is dropped on the way
+    past so it does not sit in the browser forever.
+  */
+  dropLegacy() {
+    try {
+      window.localStorage.removeItem(SESSION_KEY);
+    } catch {
+      /* Nothing to drop. */
+    }
+  },
+};
+
 const readSession = (): User | null => {
   if (typeof window === 'undefined') return null;
-  const savedId = localStorage.getItem(SESSION_KEY);
+  sessionStore.dropLegacy();
+  const savedId = sessionStore.read();
   if (!savedId) return null;
   const user = tenderRepository.getUserById(savedId);
   // A person removed or deactivated since their last visit loses the session.
@@ -52,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setCurrentUser = (user: User) => {
     setSession(user);
-    if (typeof window !== 'undefined') localStorage.setItem(SESSION_KEY, user.id);
+    if (typeof window !== 'undefined') sessionStore.write(user.id);
     setDataVersion((v) => v + 1);
   };
 
@@ -65,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = () => {
-    if (typeof window !== 'undefined') localStorage.removeItem(SESSION_KEY);
+    if (typeof window !== 'undefined') sessionStore.clear();
     setSession(null);
   };
 
