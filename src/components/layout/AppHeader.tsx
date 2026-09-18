@@ -210,10 +210,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               className="flex items-center gap-3 min-w-0"
             >
               <img
-                src="/logo-full.png"
+                src="/logo.png"
                 alt="Inspire Builders"
-                width={930}
-                height={260}
+                width={2560}
+                height={760}
                 className="h-9 w-auto block shrink-0 self-center"
               />
               <span className="hidden lg:block border-l border-[var(--border)] pl-3 text-[11px] text-[var(--text-900)]">

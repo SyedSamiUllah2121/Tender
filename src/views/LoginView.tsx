@@ -22,16 +22,16 @@ interface LoginViewProps {
 }
 
 /**
- * The logo is 930x260. In a flex column the default `align-items: stretch`
+ * The logo is 2560x760. In a flex column the default `align-items: stretch`
  * would pull an <img> to the full panel width and squash it, so it is given an
  * explicit width and `self-start` and is never allowed to stretch.
  */
 const Logo: React.FC<{ className?: string }> = ({ className = '' }) => (
   <img
-    src="/logo-full.png"
+    src="/logo.png"
     alt="Inspire Builders"
-    width={930}
-    height={260}
+    width={2560}
+    height={760}
     className={`block h-auto w-[210px] max-w-full self-start shrink-0 ${className}`}
   />
 );
