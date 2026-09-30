@@ -29,7 +29,10 @@ are not obvious from the code.
   `tenderRepository.signIn` with a real auth call.
 - The session is kept in `sessionStorage` (ends when the browser closes). Every
   storage access is guarded, since storage throws in private mode.
-- Signing in always lands on `/dashboard`; there is no `?next=` return path.
+- Signing in lands on `/dashboard`, except that a tender page (`/tenders/<id>`,
+  where notification links point) is carried through `?next=` and reopened.
+  `destinationAfterSignIn` in `AuthContext.tsx` accepts only that shape. Signing
+  out does not carry the open tender to the next person.
 - `getWhatsAppUrl` lives in `lib/notify/deepLink.ts` so client bundles don't
   pull in the notifier modules that read credentials from `process.env`.
 - `/logo.png` is the correct two-tone lockup (2560x760). Its bytes changed
@@ -112,10 +115,14 @@ are not obvious from the code.
 - The session moved from localStorage to sessionStorage, so it ends when the
   browser closes. Leftover localStorage sessions are purged.
 
+### 2026-09-30: Pipeline filter, tender links through sign-in
+- Removed the owner filter from the tenders pipeline. The Owner column, export
+  field and bulk reassignment stay.
+- Notification links to a tender reopen that tender after sign-in again. Only
+  tender pages are carried; every other screen still opens the dashboard.
+
 ## Open items
 
 - **Shared database.** The biggest gap. Staff can't see each other's tenders
   and follow-ups until data moves off the browser to a server store.
 - **Real authentication** to replace the placeholder browser-side credentials.
-- Notification deep links to a specific tender no longer reopen that tender
-  after sign-in (a side effect of always landing on the dashboard).

@@ -1,7 +1,7 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { LoadingScreen } from '../components/ui/LoadingScreen';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { User } from '../types';
@@ -11,6 +11,17 @@ const SESSION_KEY = 'inspire_user_id';
 /** The sign-in screen, and the screen a signed-in person lands on. */
 export const LOGIN_ROUTE = '/login';
 export const HOME_ROUTE = '/dashboard';
+
+/*
+  Signing in opens the dashboard, with one exception: a tender page, which is
+  where notification links point, is reopened after sign-in. Only that exact
+  shape is accepted, so `?next=` cannot send anyone to another site or screen.
+*/
+const TENDER_PAGE = /^\/tenders\/(?!new$)[A-Za-z0-9_-]+$/;
+
+/** Where to go after signing in, given the page someone was sent away from. */
+export const destinationAfterSignIn = (path: string | null): string =>
+  path && TENDER_PAGE.test(path) ? path : HOME_ROUTE;
 
 interface SessionContextType {
   /** Null until somebody signs in. Only the login screen should see that. */
@@ -142,17 +153,25 @@ export const useSession = (): SessionContextType => {
 /**
  * Sends anyone without a session to the login screen, and holds the children
  * back until there is one. Every screen behind it can rely on currentUser
- * being present. Signing in always opens the dashboard, so where someone was
- * headed is deliberately not carried across.
+ * being present. Arriving signed out on a tender page carries that page to
+ * the login screen so signing in reopens it; see destinationAfterSignIn.
  */
 export const RequireAuth: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { session } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
+  // Losing a session here means signing out, and the next person to sign in
+  // should not inherit the tender that was left open.
+  const hadSession = useRef(session !== null);
 
   useEffect(() => {
-    if (session) return;
-    router.replace(LOGIN_ROUTE);
-  }, [session, router]);
+    if (session) {
+      hadSession.current = true;
+      return;
+    }
+    const carry = !hadSession.current && destinationAfterSignIn(pathname) !== HOME_ROUTE;
+    router.replace(carry ? `${LOGIN_ROUTE}?next=${encodeURIComponent(pathname)}` : LOGIN_ROUTE);
+  }, [session, pathname, router]);
 
   if (!session) return <LoadingScreen message="Taking you to sign in…" />;
 
