@@ -21,7 +21,7 @@ import { Tender, TenderStatus } from '../types';
 import { formatAED, fromFils } from '../lib/money';
 import { pricePerSqm } from '../lib/derive';
 import { StatusBadge } from '../components/ui/StatusBadge';
-import { can, hasFullAccess } from '../lib/permissions';
+import { can } from '../lib/permissions';
 
 export const TendersView: React.FC = () => {
   const router = useRouter();
@@ -32,7 +32,6 @@ export const TendersView: React.FC = () => {
   const [fiscalYear, setFiscalYear] = useState<string>('ALL');
   const [selectedStatuses, setSelectedStatuses] = useState<TenderStatus[]>([]);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
-  const [selectedOwners, setSelectedOwners] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('ALL');
   const [selectedConsultant, setSelectedConsultant] = useState<string>('ALL');
   const [valueRange, setValueRange] = useState<string>('ALL');
@@ -105,11 +104,6 @@ export const TendersView: React.FC = () => {
       );
     }
 
-    // Owners Multi
-    if (selectedOwners.length > 0) {
-      result = result.filter((t) => t.ownerId && selectedOwners.includes(t.ownerId));
-    }
-
     // Location
     if (selectedLocation !== 'ALL') {
       result = result.filter((t) => t.location === selectedLocation);
@@ -155,7 +149,6 @@ export const TendersView: React.FC = () => {
     fiscalYear,
     selectedStatuses,
     selectedSources,
-    selectedOwners,
     selectedLocation,
     selectedConsultant,
     valueRange,
@@ -244,7 +237,6 @@ export const TendersView: React.FC = () => {
     setFiscalYear('ALL');
     setSelectedStatuses([]);
     setSelectedSources([]);
-    setSelectedOwners([]);
     setSelectedLocation('ALL');
     setSelectedConsultant('ALL');
     setValueRange('ALL');
@@ -389,8 +381,8 @@ export const TendersView: React.FC = () => {
           </button>
         </div>
 
-        {/* 7-Column Filters Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pt-1 border-t border-slate-200 text-xs">
+        {/* 6-Column Filters Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 pt-1 border-t border-slate-200 text-xs">
           {/* 1. Year */}
           <div>
             <label className="block text-[11px] font-medium text-slate-400 mb-1">
@@ -459,31 +451,7 @@ export const TendersView: React.FC = () => {
             </select>
           </div>
 
-          {/* 4. Owner */}
-          {hasFullAccess(currentUser) && (
-            <div>
-              <label className="block text-[11px] font-medium text-slate-400 mb-1">
-                Owner
-              </label>
-              <select
-                value={selectedOwners[0] || 'ALL'}
-                onChange={(e) => {
-                  setSelectedOwners(e.target.value === 'ALL' ? [] : [e.target.value]);
-                  setPage(1);
-                }}
-                className="w-full p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none text-xs"
-              >
-                <option value="ALL">All Owners</option>
-                {allUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {/* 5. Location */}
+          {/* 4. Location */}
           <div>
             <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Location
@@ -505,7 +473,7 @@ export const TendersView: React.FC = () => {
             </select>
           </div>
 
-          {/* 6. Consultant */}
+          {/* 5. Consultant */}
           <div>
             <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Consultant
@@ -527,7 +495,7 @@ export const TendersView: React.FC = () => {
             </select>
           </div>
 
-          {/* 7. Value Range */}
+          {/* 6. Value Range */}
           <div>
             <label className="block text-[11px] font-medium text-slate-400 mb-1">
               Value Band
