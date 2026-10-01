@@ -5,9 +5,10 @@ import React, { useEffect } from 'react';
 import { LoadingScreen } from '../../components/ui/LoadingScreen';
 import { destinationAfterSignIn, useSession } from '../../context/AuthContext';
 import { LoginView } from '../../views/LoginView';
+import { PASSWORDLESS_MANAGER } from '../../lib/repositories/seedData';
 
 export function LoginScreen() {
-  const { session, signIn } = useSession();
+  const { session, signIn, signInAsManager } = useSession();
   const router = useRouter();
   const destination = destinationAfterSignIn(useSearchParams().get('next'));
 
@@ -21,5 +22,10 @@ export function LoginScreen() {
 
   if (session) return <LoadingScreen message="Opening your workspace…" />;
 
-  return <LoginView onSignIn={signIn} />;
+  return (
+    <LoginView
+      onSignIn={signIn}
+      onContinueAsManager={PASSWORDLESS_MANAGER ? signInAsManager : undefined}
+    />
+  );
 }

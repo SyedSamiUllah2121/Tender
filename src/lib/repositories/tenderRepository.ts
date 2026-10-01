@@ -18,6 +18,7 @@ import {
   DEFAULT_PASSWORD,
   SHORTCUT_LOGIN,
   SHORTCUT_USER_ID,
+  PASSWORDLESS_MANAGER,
   SUPERSEDED_PASSWORDS,
   SEED_USERS,
   generateSeedTenders,
@@ -352,6 +353,19 @@ export const tenderRepository = {
     }
 
     return { user };
+  },
+
+  /**
+   * Opens the Manager account without a password, while PASSWORDLESS_MANAGER
+   * is on. Prefers Engr. Hassan, else any active Manager.
+   */
+  signInAsManager(): { user?: User; error?: string } {
+    if (!PASSWORDLESS_MANAGER) return { error: 'Sign-in without a password is not available here.' };
+    const live = (u: User) => !u.deletedAt && u.isActive && u.role === 'MANAGER';
+    const manager =
+      db.users.find((u) => u.id === SHORTCUT_USER_ID && live(u)) ?? db.users.find(live);
+    if (!manager) return { error: 'There is no active Manager account.' };
+    return { user: manager };
   },
 
   /** Lets a signed-in person replace their own password. */

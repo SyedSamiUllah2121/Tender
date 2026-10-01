@@ -29,6 +29,8 @@ interface SessionContextType {
   allUsers: User[];
   /** Returns an error message, or null when the sign-in succeeded. */
   signIn: (email: string, password: string) => string | null;
+  /** Development only: opens the Manager account with no password. */
+  signInAsManager: () => string | null;
   signOut: () => void;
   refreshData: () => void;
   dataVersion: number;
@@ -135,8 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const signIn = (email: string, password: string): string | null => {
-    const { user, error } = tenderRepository.signIn(email, password);
+  const startSession = ({ user, error }: { user?: User; error?: string }): string | null => {
     if (error || !user) return error || 'Unable to sign in.';
     setAllUsers(tenderRepository.getUsers());
     setSession(user);
@@ -144,6 +145,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setDataVersion((v) => v + 1);
     return null;
   };
+
+  const signIn = (email: string, password: string): string | null =>
+    startSession(tenderRepository.signIn(email, password));
+
+  const signInAsManager = (): string | null => startSession(tenderRepository.signInAsManager());
 
   const signOut = () => {
     if (typeof window !== 'undefined') sessionStore.clear();
@@ -156,6 +162,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         session,
         allUsers,
         signIn,
+        signInAsManager,
         signOut,
         refreshData,
         dataVersion,

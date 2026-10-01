@@ -24,6 +24,14 @@ export const SUPERSEDED_PASSWORDS = ['inspire@2026'];
  */
 export const SHORTCUT_LOGIN = '123';
 export const SHORTCUT_USER_ID = 'u_hassan';
+
+/**
+ * "Continue as Manager" on the sign-in screen, with no password, on every
+ * build including the live site, at the owner's request. Anyone who can open
+ * the sign-in page can use it. Set this to false (and remove SHORTCUT_LOGIN)
+ * before the system is used for real.
+ */
+export const PASSWORDLESS_MANAGER = true;
 import { CANONICAL_SOURCES } from '../normalize';
 
 export const SEED_USERS: User[] = [

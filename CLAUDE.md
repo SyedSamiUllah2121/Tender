@@ -25,8 +25,11 @@ are not obvious from the code.
   from record counts; bump `SEED_REVISION` if you change the seed without
   changing the counts, or browsers will keep the old data.
 - Sign-in credentials are browser-side placeholders, not security. Before real
-  use: remove `SHORTCUT_LOGIN` in `seedData.ts` and replace
-  `tenderRepository.signIn` with a real auth call.
+  use: set `PASSWORDLESS_MANAGER` to false and remove `SHORTCUT_LOGIN` in
+  `seedData.ts`, and replace `tenderRepository.signIn` with a real auth call.
+- `PASSWORDLESS_MANAGER` is on, at the owner's request: the sign-in screen,
+  live site included, has "Continue as Manager", which opens the Manager
+  account with no password for anyone who can load the page.
 - The session is kept in `sessionStorage` (ends when the browser closes). Every
   storage access is guarded, since storage throws in private mode.
 - Signing in lands on `/dashboard`, except that a tender page (`/tenders/<id>`,

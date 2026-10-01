@@ -12,6 +12,7 @@ import {
   MapPin,
   ShieldCheck,
   AlertCircle,
+  UserCog,
 } from 'lucide-react';
 
 const RED = '#8b151b';
@@ -19,6 +20,8 @@ const RED = '#8b151b';
 interface LoginViewProps {
   /** Returns an error message, or null when the sign-in succeeded. */
   onSignIn: (email: string, password: string) => string | null;
+  /** Quick Manager access (PASSWORDLESS_MANAGER); the button is not rendered without it. */
+  onContinueAsManager?: () => string | null;
 }
 
 /**
@@ -42,7 +45,7 @@ const FACTS = [
   { icon: ShieldCheck, label: 'Access', value: 'Role based' },
 ];
 
-export const LoginView: React.FC<LoginViewProps> = ({ onSignIn }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onSignIn, onContinueAsManager }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -257,6 +260,31 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSignIn }) => {
               )}
             </button>
           </form>
+
+          {onContinueAsManager && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  const message = onContinueAsManager();
+                  if (message) setError(message);
+                }}
+                className="group flex w-full cursor-pointer items-center gap-3 rounded-md border border-slate-300 bg-white px-4 py-3 text-left transition-colors hover:border-[#8b151b] hover:bg-[var(--red-50)]"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#8b151b] text-white">
+                  <UserCog className="h-[18px] w-[18px]" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[14px] font-semibold text-slate-900 group-hover:text-[#8b151b]">
+                    Continue as Manager
+                  </span>
+                  <span className="block text-[12px] text-slate-500">Engr. Hassan · no password needed</span>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-slate-400 group-hover:text-[#8b151b]" />
+              </button>
+            </div>
+          )}
 
           <div className="mt-8 flex items-center gap-4">
             <span className="h-px flex-1 bg-slate-300" />
