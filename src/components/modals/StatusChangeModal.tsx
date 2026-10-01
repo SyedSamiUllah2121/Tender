@@ -57,7 +57,7 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
     UNDER_REVIEW: ['AWARDED', 'REJECTED', 'ON_HOLD', 'CANCELLED'],
     ON_HOLD: ['SUBMITTED', 'UNDER_REVIEW', 'REJECTED', 'CANCELLED'],
     AWARDED: can(currentUser, 'revert_terminal_status') ? ['SUBMITTED', 'UNDER_REVIEW'] : [],
-    REJECTED: ['SUBMITTED'],
+    REJECTED: can(currentUser, 'revert_terminal_status') ? ['SUBMITTED'] : [],
     CANCELLED: [],
   };
 
@@ -69,12 +69,12 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
     setSubmitting(true);
 
     try {
-      // Validate terminal revert by Super Admin
+      // Reopening a closed tender is the Manager's call
       if (
         (tender.status === 'AWARDED' || tender.status === 'REJECTED') &&
         !can(currentUser, 'revert_terminal_status')
       ) {
-        throw new Error('Only the Manager or Admin 1 can revert an Awarded or Rejected tender.');
+        throw new Error('Only the Manager can reopen an Awarded or Rejected tender.');
       }
 
       if (tender.status === 'AWARDED' && !revertReason.trim()) {
@@ -127,9 +127,9 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
         // dragging a selection out of a field cannot dismiss a part-filled form.
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in-50 duration-100"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in"
     >
-      <div className="bg-white rounded-md shadow-2xl border border-slate-300 max-w-lg w-full max-h-[90dvh] overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl border border-[var(--border)] max-w-lg w-full max-h-[90dvh] overflow-y-auto animate-pop-in">
         {/* Header */}
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
           <div>
@@ -166,7 +166,8 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
               <div className="p-3 bg-amber-50 border border-amber-300 rounded-md text-xs text-amber-800 flex items-center gap-2">
                 <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
                 <span>
-                  Current status <strong>{tender.status}</strong> is terminal. Only Super Admin can revert.
+                  This tender is <strong>{tender.status}</strong>, which is final. Only the Manager can reopen
+                  it.
                 </span>
               </div>
             ) : (
@@ -183,7 +184,7 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
                       targetStatus === st
                         ? 'border-[#8b151b] bg-[#8b151b] text-white '
                         : 'border-slate-300 hover:border-slate-300 text-slate-700 bg-white'
-                    }`}
+                    } shadow-sm`}
                   >
                     {st === 'AWARDED' ? 'Awarded Contract' : st === 'REJECTED' ? 'Rejected Bid' : st}
                   </button>
@@ -315,10 +316,10 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
           )}
 
           {/* Revert Reason if moving out of AWARDED */}
-          {tender.status === 'AWARDED' && targetStatus !== 'AWARDED' && (
+          {tender.status === 'AWARDED' && targetStatus !== 'AWARDED' && allowed.length > 0 && (
             <div className="p-3 bg-amber-50 border border-amber-300 rounded-md space-y-2">
               <label className="block text-xs font-semibold text-amber-900">
-                Super Admin Revert Justification *
+                Reason for reopening this award *
               </label>
               <textarea
                 required
@@ -375,7 +376,7 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
             <button
               type="submit"
               disabled={submitting || allowed.length === 0}
-              className="px-4 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer disabled:opacity-40"
+              className="px-4 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer disabled:opacity-40 shadow-sm"
             >
               {submitting ? 'Applying...' : 'Confirm Status Transition'}
             </button>

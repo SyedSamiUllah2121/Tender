@@ -1,8 +1,11 @@
 /**
  * Tendering Department roles.
- * MANAGER      - Engr. Hassan. Full access: view, monitor, assign and follow up on every tender.
- * ADMIN_1      - Syed Shahzaib. Everything the Manager can do, plus people/role administration.
+ * MANAGER      - Engr. Hassan. Everything. Alone reopens or deletes closed tenders and manages
+ *                the Manager and Admin 1 accounts.
+ * ADMIN_1      - Syed Shahzaib. All tenders, plus team and system administration for everyone
+ *                below Admin 1 (Admin 2, salespeople, Dubai Villas).
  * ADMIN_2      - Haseeb. Full tender + follow-up administration (no people/role administration).
+ * The Manager and Admins see their territory: All UAE, or one region plus their own tenders.
  * SALESPERSON  - Source owners (Hassan, Bilal, Yaqub, Waseem, Hamad). Own assigned tenders only.
  * DUBAI_VILLAS - Engr. Zeeshan. Dubai villa tenders only.
  */
@@ -21,17 +24,20 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 /** Short note shown in the sidebar under the signed-in person's role. */
 export const ROLE_SCOPE_NOTE: Record<Role, string> = {
-  MANAGER: 'Full access across the Tendering Department.',
-  ADMIN_1: 'Full access, plus people, roles and permissions.',
-  ADMIN_2: 'Full tender and follow-up administration.',
+  MANAGER: 'Full access to everything in the Tendering Department.',
+  ADMIN_1: 'All tenders, plus team accounts and system administration.',
+  ADMIN_2: 'All tenders and follow-ups; team is read-only.',
   SALESPERSON: 'Restricted to your own assigned and sourced tenders.',
   DUBAI_VILLAS: 'Restricted to Dubai villa tenders and projects.',
 };
 
 export const ROLE_DESCRIPTIONS: Record<Role, string> = {
-  MANAGER: 'Full access. View, monitor, assign and follow up on all tenders; manage people and roles.',
-  ADMIN_1: 'Full access plus people, roles and permissions. Overall tendering administration.',
-  ADMIN_2: 'Full tender administration: details, target dates, status and follow-up records.',
+  MANAGER:
+    'Full access to everything. The only role that can reopen or delete a closed tender, and manage Manager and Admin 1 accounts.',
+  ADMIN_1:
+    'Runs the team and system: adds and edits Admin 2, salespeople and Dubai Villas staff, sets their passwords, manages sources and consultants. Cannot reopen or delete tenders.',
+  ADMIN_2:
+    'Full tender administration: details, target dates, status, follow-ups and awards. Can view the team but not change it.',
   SALESPERSON: 'Own assigned tenders and follow-ups only. Must follow up continuously.',
   DUBAI_VILLAS: 'Dubai villa tenders and follow-ups only.',
 };

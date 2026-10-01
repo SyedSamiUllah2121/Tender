@@ -81,9 +81,9 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in-50 duration-100"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-16 sm:pt-24 bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in"
     >
-      <div className="bg-white rounded-md shadow-2xl border border-slate-300 max-w-xl w-full max-h-[80dvh] overflow-hidden flex flex-col">
+      <div className="bg-white rounded-xl shadow-2xl border border-[var(--border)] max-w-xl w-full max-h-[80dvh] overflow-hidden flex flex-col animate-pop-in">
         {/* Search Input */}
         <div className="p-3.5 border-b border-slate-200 flex items-center gap-3 bg-white">
           <Search className="w-4 h-4 text-slate-400" />
@@ -105,7 +105,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         </div>
 
         {/* Results */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-2 divide-y divide-slate-200">
+        <div className="flex-1 min-h-0 overflow-y-auto p-2 divide-y divide-[var(--border-subtle)]">
           {/* Quick Actions */}
           {quickActions.length > 0 && (
             <div className="py-1.5">

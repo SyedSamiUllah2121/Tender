@@ -23,7 +23,14 @@ import {
   generateSeedTenders,
   SEED_STAMP,
 } from './seedData';
-import { can, canAccessTender, scopeTenders, hasFullAccess } from '../permissions';
+import {
+  can,
+  canAccessTender,
+  scopeTenders,
+  hasFullAccess,
+  canManagePerson,
+  assignableRoles,
+} from '../permissions';
 import {
   ACTIVE_STATUSES,
   buildMonitorRow,
@@ -114,21 +121,23 @@ function migrateUsers(saved: User[]): User[] {
 }
 
 /**
- * At least one active Manager or Admin 1 must remain, or nobody can administer
- * people any more. `next` is the replacement record, or null when removing.
+ * At least one active Manager must remain: only a Manager can manage the
+ * senior accounts and reopen closed tenders. Checked only when the change
+ * would take a Manager away, so data that somehow has none can still be
+ * repaired. `next` is the replacement record, or null when removing.
  */
-function assertPeopleAdminRemains(userId: string, next: User | null): void {
-  const stillAdmin = (u: User) =>
-    !u.deletedAt && u.isActive && (u.role === 'ADMIN_1' || u.role === 'MANAGER');
+function assertManagerRemains(userId: string, next: User | null): void {
+  const activeManager = (u: User) => !u.deletedAt && u.isActive && u.role === 'MANAGER';
 
-  const remaining = db.users.filter((u) => u.id !== userId).some(stillAdmin);
-  if (remaining) return;
-  if (next && stillAdmin(next)) return;
+  const current = db.users.find((u) => u.id === userId);
+  if (!current || !activeManager(current)) return;
+  if (next && activeManager(next)) return;
+  if (db.users.some((u) => u.id !== userId && activeManager(u))) return;
 
-  throw new Error(
-    'At least one active Manager or Admin 1 must remain to administer people and roles.'
-  );
+  throw new Error('At least one active Manager must remain. Make someone else Manager first.');
 }
+
+const SENIOR_ONLY = 'Only the Manager can change Manager and Admin 1 accounts.';
 
 /** Shortest password a person or an administrator may set. */
 export const MIN_PASSWORD_LENGTH = 8;
@@ -151,6 +160,8 @@ class InMemoryDatabase {
   activityLogs: ActivityLog[] = [];
   notifications: Notification[] = [];
   initialized = false;
+  /** Bumped on every save and load; cached views of the data key on it. */
+  revision = 0;
 
   constructor() {
     this.initialize();
@@ -158,6 +169,7 @@ class InMemoryDatabase {
 
   private initialize() {
     if (this.initialized) return;
+    this.revision++;
 
     // Try loading from localStorage if in browser
     if (typeof window !== 'undefined') {
@@ -224,6 +236,7 @@ class InMemoryDatabase {
   }
 
   persist() {
+    this.revision++;
     if (typeof window !== 'undefined') {
       try {
         const serializable = {
@@ -285,6 +298,8 @@ class InMemoryDatabase {
 
 export const db = new InMemoryDatabase();
 
+let populatedCache: { revision: number; list: Tender[] } | null = null;
+
 /**
  * Repository layer for Tenders, Awards, Follow-ups, Activities
  */
@@ -333,7 +348,7 @@ export const tenderRepository = {
       return { error: 'Those details do not match an account.' };
     }
     if (!user.isActive) {
-      return { error: 'This account has been deactivated. Contact Admin 1.' };
+      return { error: 'This account has been deactivated. Contact the Manager or Admin 1.' };
     }
 
     return { user };
@@ -354,13 +369,17 @@ export const tenderRepository = {
     db.persist();
   },
 
-  /** Lets the Manager or Admin 1 set or reset anyone's password. */
+  /**
+   * Sets or resets someone's password: the Manager for anyone, Admin 1 for
+   * everyone but the Manager and Admin 1 accounts.
+   */
   setPassword(actor: User, userId: string, nextPassword: string): void {
     if (!can(actor, 'manage_users')) {
       throw new Error('Only the Manager or Admin 1 can set passwords.');
     }
     const user = db.users.find((u) => u.id === userId && !u.deletedAt);
     if (!user) throw new Error('User not found');
+    if (!canManagePerson(actor, user)) throw new Error(SENIOR_ONLY);
     assertUsablePassword(nextPassword);
     user.password = nextPassword;
     db.persist();
@@ -399,6 +418,9 @@ export const tenderRepository = {
     if (!can(actor, 'manage_users')) {
       throw new Error('Only the Manager or Admin 1 can add persons to the Tendering Department.');
     }
+    if (!assignableRoles(actor).includes(data.role)) {
+      throw new Error('Only the Manager can add a Manager or Admin 1.');
+    }
     const email = data.email.trim().toLowerCase();
     if (db.users.some((u) => !u.deletedAt && u.email.toLowerCase() === email)) {
       throw new Error('A user with this email already exists.');
@@ -424,6 +446,10 @@ export const tenderRepository = {
     }
     const idx = db.users.findIndex((u) => u.id === id);
     if (idx === -1) throw new Error('User not found');
+    if (!canManagePerson(actor, db.users[idx])) throw new Error(SENIOR_ONLY);
+    if (data.role && data.role !== db.users[idx].role && !assignableRoles(actor).includes(data.role)) {
+      throw new Error('Only the Manager can make someone a Manager or Admin 1.');
+    }
 
     if (data.email) {
       const email = data.email.trim().toLowerCase();
@@ -436,7 +462,7 @@ export const tenderRepository = {
     if (data.name) data = { ...data, name: data.name.trim() };
 
     const next = { ...db.users[idx], ...data };
-    assertPeopleAdminRemains(id, next);
+    assertManagerRemains(id, next);
 
     db.users[idx] = next;
     db.persist();
@@ -453,8 +479,9 @@ export const tenderRepository = {
     }
     const user = db.users.find((u) => u.id === id && !u.deletedAt);
     if (!user) throw new Error('User not found');
+    if (!canManagePerson(actor, user)) throw new Error(SENIOR_ONLY);
 
-    assertPeopleAdminRemains(id, null);
+    assertManagerRemains(id, null);
 
     user.deletedAt = new Date().toISOString();
     user.isActive = false;
@@ -481,6 +508,63 @@ export const tenderRepository = {
     db.consultants.push(consultant);
     db.persist();
     return consultant;
+  },
+
+  /**
+   * Every live tender with its joins, built once per data revision. Joining
+   * tender by tender scanned the whole follow-up, comment and activity lists
+   * for each of 1,156 tenders, and the sidebar, header and page each asked
+   * for it on every navigation. Lookups are indexed here and the result is
+   * reused until the data changes. Callers get a fresh array; the tender
+   * objects are shared and must be treated as read-only.
+   */
+  populatedTenders(): Tender[] {
+    if (populatedCache && populatedCache.revision === db.revision) return populatedCache.list.slice();
+
+    const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((r) => [r.id, r]));
+    const groupBy = <T,>(rows: T[], key: (r: T) => string) => {
+      const m = new Map<string, T[]>();
+      for (const r of rows) {
+        const k = key(r);
+        const list = m.get(k);
+        if (list) list.push(r);
+        else m.set(k, [r]);
+      }
+      return m;
+    };
+    const newestFirst = (a: string, b: string) => new Date(b).getTime() - new Date(a).getTime();
+
+    const users = byId(db.users);
+    const sources = byId(db.sources);
+    const consultants = byId(db.consultants);
+    const clients = byId(db.clients);
+    const awards = new Map<string, Award>();
+    for (const a of db.awards) if (!awards.has(a.tenderId)) awards.set(a.tenderId, a);
+    const followUps = groupBy(db.followUps, (f) => f.tenderId);
+    const comments = groupBy(db.comments.filter((c) => !c.deletedAt), (c) => c.tenderId);
+    const logs = groupBy(db.activityLogs, (l) => l.tenderId ?? '');
+
+    const list = db.tenders
+      .filter((t) => !t.deletedAt)
+      .map((tender) => ({
+        ...tender,
+        owner: users.get(tender.ownerId),
+        source: tender.sourceId ? sources.get(tender.sourceId) : undefined,
+        consultant: tender.consultantId ? consultants.get(tender.consultantId) : undefined,
+        client: tender.clientId ? clients.get(tender.clientId) : undefined,
+        award: awards.get(tender.id) || null,
+        followUps: (followUps.get(tender.id) || []).slice().sort((a, b) => newestFirst(a.contactedAt, b.contactedAt)),
+        comments: (comments.get(tender.id) || []).slice().sort((a, b) => newestFirst(a.createdAt, b.createdAt)),
+        activityLogs: (logs.get(tender.id) || []).slice().sort((a, b) => newestFirst(a.createdAt, b.createdAt)),
+      }));
+
+    populatedCache = { revision: db.revision, list };
+    return list.slice();
+  },
+
+  /** Drops cached views so the next read rebuilds them from the store. */
+  invalidateCache(): void {
+    db.revision++;
   },
 
   // Populate references
@@ -518,7 +602,7 @@ export const tenderRepository = {
    */
   getTenders(currentUser: User, params?: TenderFilterParams): Tender[] {
     // 1. Data layer scoping (populate first so source-based access resolves)
-    const populated = db.tenders.filter((t) => !t.deletedAt).map((t) => this.populateTender(t));
+    const populated = this.populatedTenders();
     const scoped = scopeTenders(populated, currentUser);
 
     // 2. Filter criteria
@@ -706,9 +790,47 @@ export const tenderRepository = {
     return this.populateTender(newTender);
   },
 
-  updateTender(currentUser: User, id: string, patch: Partial<Tender>): Tender {
+  updateTender(currentUser: User, id: string, patchIn: Partial<Tender>): Tender {
     const tender = db.tenders.find((t) => t.id === id && !t.deletedAt);
     if (!tender) throw new Error('Tender not found');
+
+    /*
+      Only details and the owner change here. Status, deletion and the award
+      have their own paths with their own rules (changeStatus,
+      softDeleteTender), so anything else in the patch is dropped rather than
+      written straight onto the record.
+    */
+    const EDITABLE: (keyof Tender)[] = [
+      'clientNameRaw',
+      'location',
+      'region',
+      'tenderAmount',
+      'targetPrice',
+      'totalAreaSqm',
+      'projectDetails',
+      'remarks',
+      'commissionNote',
+      'sourceId',
+      'consultantId',
+      'targetDate',
+      'ownerId',
+    ];
+    const patch: Partial<Tender> = {};
+    for (const key of EDITABLE) {
+      if (patchIn[key] !== undefined) (patch as any)[key] = patchIn[key];
+    }
+
+    // Every check runs before anything is written, so a refused change leaves
+    // no half-made history entries behind.
+    if (patch.ownerId && patch.ownerId !== tender.ownerId) {
+      if (!can(currentUser, 'reassign_owner')) {
+        throw new Error('Only Admins can reassign tender ownership.');
+      }
+      const newOwner = db.users.find((u) => u.id === patch.ownerId);
+      if (!newOwner || newOwner.deletedAt || !newOwner.isActive) {
+        throw new Error('A tender can only be assigned to an active member of the department.');
+      }
+    }
 
     if (!can(currentUser, 'edit_tender', this.populateTender(tender))) {
       throw new Error('You do not have permission to edit this tender.');
@@ -801,8 +923,9 @@ export const tenderRepository = {
       SUBMITTED: ['UNDER_REVIEW', 'AWARDED', 'REJECTED', 'ON_HOLD', 'CANCELLED'],
       UNDER_REVIEW: ['AWARDED', 'REJECTED', 'ON_HOLD', 'CANCELLED'],
       ON_HOLD: ['SUBMITTED', 'UNDER_REVIEW', 'REJECTED', 'CANCELLED'],
+      // Reopening a closed tender is the Manager's call (revert_terminal_status).
       AWARDED: can(currentUser, 'revert_terminal_status') ? ['SUBMITTED', 'UNDER_REVIEW'] : [],
-      REJECTED: ['SUBMITTED'], // Re-bid increments revision
+      REJECTED: can(currentUser, 'revert_terminal_status') ? ['SUBMITTED'] : [], // Re-bid increments revision
       CANCELLED: [],
     };
 
@@ -1013,6 +1136,11 @@ export const tenderRepository = {
   addComment(currentUser: User, tenderId: string, body: string): Comment {
     const tender = db.tenders.find((t) => t.id === tenderId && !t.deletedAt);
     if (!tender) throw new Error('Tender not found');
+    const populated = this.populateTender(tender);
+    if (!can(currentUser, 'comment', populated)) {
+      throw new Error('You do not have permission to comment on this tender.');
+    }
+    if (!body.trim()) throw new Error('A comment cannot be empty.');
 
     const nowIso = new Date().toISOString();
     const comment: Comment = {
@@ -1032,7 +1160,15 @@ export const tenderRepository = {
     if (mentions) {
       for (const m of mentions) {
         const namePart = m.replace('@', '').toLowerCase();
-        const targetUser = db.users.find((u) => u.name.toLowerCase().includes(namePart));
+        // Only people who can open this tender hear about it; a mention must
+        // not tell anyone else that the tender exists or what was said on it.
+        const targetUser = db.users.find(
+          (u) =>
+            !u.deletedAt &&
+            u.isActive &&
+            u.name.toLowerCase().includes(namePart) &&
+            canAccessTender(u, populated)
+        );
         if (targetUser && targetUser.id !== currentUser.id) {
           db.notifications.unshift({
             id: `notif_${Date.now()}_${targetUser.id}`,
@@ -1056,7 +1192,7 @@ export const tenderRepository = {
     if (!tender) throw new Error('Tender not found');
 
     if (!can(currentUser, 'soft_delete')) {
-      throw new Error('Only the Manager or Admin 1 can delete a tender.');
+      throw new Error('Only the Manager can delete a tender.');
     }
 
     const nowIso = new Date().toISOString();
@@ -1078,9 +1214,20 @@ export const tenderRepository = {
     db.persist();
   },
 
+  /**
+   * A person's notifications, newest first. One about a tender they can no
+   * longer open (moved to another territory, reassigned, deleted) is held
+   * back: it would lead to a refusal, and it names a tender that is no longer
+   * theirs to see.
+   */
   getNotifications(currentUser: User): Notification[] {
+    const visible = new Set(this.getTenders(currentUser).map((t) => t.id));
     return db.notifications
       .filter((n) => n.userId === currentUser.id)
+      .filter((n) => {
+        const m = n.linkUrl?.match(/^\/tenders\/([^/?#]+)$/);
+        return !m || visible.has(m[1]);
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
@@ -1166,7 +1313,11 @@ export const tenderRepository = {
         const overdueBy = Math.abs(daysToDeadline ?? 0);
         const body = `Tender #${t.tenderNumber} (${t.clientNameRaw}) passed its 2-month follow-up deadline ${overdueBy} day(s) ago. Record a clear status: Awarded, Rejected, or Still Under Process.`;
 
-        const recipients = new Set<string>([t.ownerId, ...monitors.map((m) => m.id)]);
+        const populated = this.populateTender(t);
+        const recipients = new Set<string>([
+          t.ownerId,
+          ...monitors.filter((m) => canAccessTender(m, populated)).map((m) => m.id),
+        ]);
         for (const userId of recipients) {
           if (hasUnread(userId, 'FOLLOWUP_DUE', link)) continue;
           db.notifications.unshift({

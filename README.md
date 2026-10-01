@@ -98,15 +98,25 @@ enforced in `src/lib/permissions.ts`. Scoping happens in the data layer
 
 | Role | Person | Access |
 | --- | --- | --- |
-| `MANAGER` | Engr. Hassan | Full access: view, monitor, assign and follow up on every tender; add persons and edit roles |
-| `ADMIN_1` | Syed Shahzaib | Full access, plus adding persons and editing roles & permissions; monitors and assists follow-ups past the 2-month window |
-| `ADMIN_2` | Haseeb | Full tender administration: tender details (Excel format), target dates, status, pending/overdue follow-ups |
+| `MANAGER` | Engr. Hassan | Full access to everything. The only role that can reopen or delete a closed tender, and create, change or remove Manager and Admin 1 accounts |
+| `ADMIN_1` | Syed Shahzaib | All tenders, plus team and system administration for Admin 2, salespeople and Dubai Villas staff: add, edit, deactivate, set passwords; manages sources and consultants. Cannot reopen or delete tenders or change senior accounts |
+| `ADMIN_2` | Haseeb | Full tender administration: tender details (Excel format), target dates, status, follow-ups and awards. Team is read-only |
 | `SALESPERSON` | Engr. Bilal, Sir Yaqub, Engr. Waseem, Engr. Hamad (and Engr. Hassan as a source) | Only tenders they are assigned or sourced; must follow up continuously |
 | `DUBAI_VILLAS` | Engr. Zeeshan | Dubai villa tenders only, plus anything specifically assigned to him |
 
-Adding people and changing roles is limited to `MANAGER` and `ADMIN_1`. Recording an award and assigning
-a tender to a salesperson require `MANAGER`, `ADMIN_1` or `ADMIN_2`; reverting a
-closed (Awarded / Rejected) tender requires `MANAGER` or `ADMIN_1`.
+The Manager and both Admins see their **territory**: "All UAE" covers every
+tender; Abu Dhabi or Dubai covers that region plus any tender they own. Lists,
+single tenders, notifications and deadline alerts all follow the same rule
+(`isInScope` in `permissions.ts`), so a list never shows a tender that would
+refuse to open.
+
+Team administration is `MANAGER` and `ADMIN_1`, with `canManagePerson` and
+`assignableRoles` limiting Admin 1 to accounts below Admin 1. At least one
+active Manager must always remain. Recording an award and assigning a tender
+require `MANAGER`, `ADMIN_1` or `ADMIN_2`. Reopening a closed (Awarded /
+Rejected) tender and deleting a tender require `MANAGER`. Comments and
+@mentions follow tender access: you can only comment where you can open the
+tender, and a mention only notifies people who can open it.
 
 ## Tender follow-up rule
 
@@ -124,8 +134,8 @@ The deadline is `submittedAt + 2 months`. A scheduled next follow-up is never
 placed beyond that deadline — a later date is pulled back to it. A tender past
 the deadline with no clear status is reported as **breached**: it is flagged on
 the tender page, given its own bucket on `/followups`, raised on the dashboard,
-and notified to the salesperson and to the Manager, Admin 1 and Admin 2 when the
-follow-up check runs from the header.
+and notified to the salesperson and to the Manager, Admin 1 and Admin 2 whose
+territory covers it when the follow-up check runs from the header.
 
 ## Management & admin monitoring
 

@@ -125,7 +125,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSignIn }) => {
         <div className="relative shrink-0 px-16 pt-12">
           <Logo />
 
-          <div className="mt-14 max-w-lg">
+          <div className="mt-14 max-w-lg animate-rise-in">
             <h1 className="text-[44px] font-bold leading-[1.08] tracking-tight text-slate-900">
               Tendering
               <br />
@@ -163,7 +163,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onSignIn }) => {
 
       {/* Form panel */}
       <div className="flex items-center justify-center overflow-y-auto bg-[#fafbfc] px-6 py-10 sm:px-14">
-        <div className="w-full max-w-[380px]">
+        <div className="w-full max-w-[380px] animate-rise-in [animation-delay:80ms]">
           {/* The brand panel is hidden on small screens, so the mark repeats here */}
           <div className="lg:hidden mb-10">
             <Logo className="w-[170px]" />

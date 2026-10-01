@@ -99,7 +99,7 @@ export const AwardedView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-slate-900">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
               Awarded Contracts & Project Register
             </h1>
             <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-300 text-[11px] font-semibold">
@@ -122,8 +122,8 @@ export const AwardedView: React.FC = () => {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-white p-4 rounded-md border border-[var(--border)] border-t-3 border-t-emerald-600">
+      <div className="stagger grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white p-4 rounded-xl border border-[var(--border)] border-t-3 border-t-emerald-600 shadow-card">
           <div className="text-[11px] font-medium text-emerald-700">
             Total Awarded Value
           </div>
@@ -133,7 +133,7 @@ export const AwardedView: React.FC = () => {
           <div className="text-[11px] text-gray-500 mt-1">Across all signed contracts</div>
         </div>
 
-        <div className="bg-white p-4 rounded-md border border-[var(--border)] border-t-3 border-t-emerald-600">
+        <div className="bg-white p-4 rounded-xl border border-[var(--border)] border-t-3 border-t-emerald-600 shadow-card">
           <div className="text-[11px] font-medium text-gray-500">
             Average Project Value
           </div>
@@ -143,7 +143,7 @@ export const AwardedView: React.FC = () => {
           <div className="text-[11px] text-gray-500 mt-1">Per awarded villa/structure</div>
         </div>
 
-        <div className="bg-white p-4 rounded-md border border-[var(--border)] border-t-3 border-t-amber-500">
+        <div className="bg-white p-4 rounded-xl border border-[var(--border)] border-t-3 border-t-amber-500 shadow-card">
           <div className="text-[11px] font-medium text-amber-700">
             Compliance Checklist
           </div>
@@ -163,7 +163,7 @@ export const AwardedView: React.FC = () => {
       </div>
 
       {/* Filter Row */}
-      <div className="bg-white p-3 rounded-md border border-[var(--border)] flex items-center gap-3">
+      <div className="bg-white p-3 rounded-xl border border-[var(--border)] flex items-center gap-3 shadow-card">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -171,14 +171,14 @@ export const AwardedView: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter awarded projects by PJ/N, client name, or location..."
-            className="w-full pl-9 pr-4 py-1.5 text-xs rounded-md border border-slate-400 outline-none"
+            className="w-full pl-9 pr-4 py-1.5 text-xs rounded-md border border-[var(--border-strong)] outline-none"
           />
         </div>
 
         <select
           value={yearFilter}
           onChange={(e) => setYearFilter(e.target.value)}
-          className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium"
+          className="text-xs p-1.5 rounded-xl border border-[var(--border-strong)] bg-white font-medium shadow-card"
         >
           <option value="ALL">All Fiscal Years</option>
           <option value="2026">2026</option>
@@ -188,7 +188,7 @@ export const AwardedView: React.FC = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
+      <div className="bg-white rounded-xl border border-[var(--border)] overflow-hidden shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse" style={{ fontSize: '12.5px' }}>
             <thead>
@@ -206,7 +206,7 @@ export const AwardedView: React.FC = () => {
                 <th className="p-2.5">Lead Owner</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {filtered.length === 0 ? (
                 <tr>
                   <td colSpan={11} className="p-10 text-center text-gray-400 text-xs">
@@ -222,7 +222,7 @@ export const AwardedView: React.FC = () => {
                     <tr
                       key={t.id}
                       onClick={() => router.push(`/tenders/${t.id}`)}
-                      className="hover:bg-rose-50 transition-colors cursor-pointer"
+                      className="row-enter hover:bg-rose-50 transition-colors cursor-pointer"
                     >
                       <td className="p-2.5 whitespace-nowrap">
                         <span className="font-mono font-semibold text-xs px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-300">

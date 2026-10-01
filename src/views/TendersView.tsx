@@ -303,7 +303,7 @@ export const TendersView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-base font-semibold text-slate-900">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900">
               Tenders Pipeline
             </h1>
             <span className="px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-slate-100 text-slate-700 border border-slate-300">
@@ -317,7 +317,7 @@ export const TendersView: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {/* Export Segmented Control */}
-          <div className="inline-flex rounded-md border border-slate-300 bg-white p-0.5">
+          <div className="inline-flex rounded-xl border border-[var(--border)] bg-white p-0.5 shadow-card">
             <button
               type="button"
               onClick={handleExportFiltered}
@@ -344,7 +344,7 @@ export const TendersView: React.FC = () => {
             <button
               type="button"
               onClick={() => router.push('/tenders/new')}
-              className="px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 transition-all cursor-pointer"
+              className="px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
             >
               <PlusCircle className="w-3.5 h-3.5 text-red-200" />
               <span>New Tender</span>
@@ -354,7 +354,7 @@ export const TendersView: React.FC = () => {
       </div>
 
       {/* Responsive Filter Bar */}
-      <div className="bg-white p-4 rounded-md border border-slate-300 space-y-3">
+      <div className="bg-white p-4 rounded-xl border border-[var(--border)] space-y-3 shadow-card">
         {/* Global Search row */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
           <div className="relative flex-1 w-full">
@@ -529,7 +529,7 @@ export const TendersView: React.FC = () => {
             <select
               value={bulkOwnerId}
               onChange={(e) => setBulkOwnerId(e.target.value)}
-              className="p-1.5 rounded-md border border-slate-300 bg-white text-slate-700 outline-none"
+              className="p-1.5 rounded-xl border border-[var(--border)] bg-white text-slate-700 outline-none shadow-card"
             >
               <option value="">Select New Owner...</option>
               {allUsers.map((u) => (
@@ -542,7 +542,7 @@ export const TendersView: React.FC = () => {
               type="button"
               onClick={handleBulkReassign}
               disabled={!bulkOwnerId}
-              className="px-3 py-1.5 bg-[#8b151b] hover:bg-[#731217] text-white rounded-md font-medium disabled:opacity-40 transition-colors cursor-pointer"
+              className="px-3 py-1.5 bg-[#8b151b] hover:bg-[#731217] text-white rounded-md font-medium disabled:opacity-40 transition-colors cursor-pointer shadow-sm"
             >
               Reassign Owner
             </button>
@@ -558,11 +558,11 @@ export const TendersView: React.FC = () => {
       )}
 
       {/* Table Container */}
-      <div className="bg-white rounded-md border border-slate-300 overflow-hidden">
+      <div className="bg-white rounded-xl border border-[var(--border)] overflow-hidden shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="border-b border-slate-300 bg-slate-50 uppercase font-semibold text-[10.5px] text-slate-400 tracking-wider">
+              <tr className="border-b border-[var(--border)] bg-slate-50 uppercase font-semibold text-[10.5px] text-slate-400 tracking-wider">
                 <th className="p-2.5 w-10 text-center">
                   <input
                     type="checkbox"
@@ -589,7 +589,7 @@ export const TendersView: React.FC = () => {
                 <th className="p-2.5 whitespace-nowrap">Next Follow-up</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 text-slate-900">
+            <tbody className="divide-y divide-[var(--border-subtle)] text-slate-900">
               {paginatedTenders.length === 0 ? (
                 <tr>
                   <td colSpan={14} className="p-12 text-center text-slate-400">
@@ -608,7 +608,7 @@ export const TendersView: React.FC = () => {
                   return (
                     <tr
                       key={tender.id}
-                      className={`hover:bg-slate-50 transition-colors cursor-pointer ${
+                      className={`row-enter hover:bg-slate-50 transition-colors cursor-pointer ${
                         isSelected ? 'bg-slate-50' : ''
                       }`}
                       onClick={(e) => {

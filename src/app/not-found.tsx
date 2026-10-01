@@ -19,7 +19,7 @@ export default function NotFound() {
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/dashboard"
-            className="rounded-md bg-[#8b151b] px-4 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90"
+            className="rounded-md bg-[#8b151b] px-4 py-2.5 text-[13px] font-semibold text-white transition-opacity hover:opacity-90 shadow-sm"
           >
             Back to dashboard
           </Link>

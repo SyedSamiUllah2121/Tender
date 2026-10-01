@@ -1,6 +1,7 @@
 'use client';
 
 import React, {useEffect, useState} from 'react';
+import {MotionConfig} from 'motion/react';
 import {LoadingScreen} from '../components/ui/LoadingScreen';
 import {AuthProvider} from '../context/AuthContext';
 
@@ -19,5 +20,10 @@ export function Providers({children}: {children: React.ReactNode}) {
 
   if (!mounted) return <LoadingScreen />;
 
-  return <AuthProvider>{children}</AuthProvider>;
+  // Sliding highlights honour the system's reduced-motion setting, as the CSS does.
+  return (
+    <MotionConfig reducedMotion="user">
+      <AuthProvider>{children}</AuthProvider>
+    </MotionConfig>
+  );
 }

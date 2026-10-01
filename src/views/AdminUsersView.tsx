@@ -1,12 +1,30 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
-import { ShieldCheck, PlusCircle, Lock, Pencil, Trash2, Power, PowerOff, Eye, EyeOff, KeyRound } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ShieldCheck,
+  PlusCircle,
+  Lock,
+  Pencil,
+  Trash2,
+  Power,
+  PowerOff,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Check,
+  CircleAlert,
+  CheckCircle2,
+  X,
+} from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { personInitial } from '../lib/initials';
 import { tenderRepository, MIN_PASSWORD_LENGTH } from '../lib/repositories/tenderRepository';
+import { DEFAULT_PASSWORD } from '../lib/repositories/seedData';
 import { User, Role, Region, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../types';
-import { can, canManagePeople } from '../lib/permissions';
+import { can, canManagePeople, canManagePerson, assignableRoles } from '../lib/permissions';
 import { AccessDenied } from '../components/ui/AccessDenied';
+import { useModalDismiss } from '../lib/useModalDismiss';
 
 const ICON_BTN =
   'p-1.5 rounded-md cursor-pointer transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent';
@@ -45,12 +63,33 @@ export const AdminUsersView: React.FC = () => {
 
   const [editing, setEditing] = useState<User | null>(null);
   const [showModal, setShowModal] = useState(false);
+  useModalDismiss(showModal, () => setShowModal(false));
   const [form, setForm] = useState<PersonForm>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  // Set when Save was pressed with a password that is too short; the hint
+  // under the field turns red and the field takes focus.
+  const [passwordError, setPasswordError] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+  /*
+    The edit form opens with the person's current password in the field, so
+    it is plain that one is set. Only a different value counts as a change;
+    otherwise re-saving someone still on the short starting password would
+    be refused for its length.
+  */
+  const [originalPassword, setOriginalPassword] = useState('');
+  // What the last save did, shown above the roster for a few seconds.
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const id = window.setTimeout(() => setNotice(null), 6000);
+    return () => window.clearTimeout(id);
+  }, [notice]);
 
   // The Manager and Admin 1 add persons and edit roles & permissions.
   const canEditPeople = canManagePeople(currentUser);
+  // Admin 1 manages everyone below Admin 1; the Manager manages everyone.
+  const rolesICanGive = assignableRoles(currentUser);
   const canViewRoster = can(currentUser, 'manage_admin');
 
   // The roster includes deactivated people so they can be reactivated.
@@ -75,22 +114,27 @@ export const AdminUsersView: React.FC = () => {
   const openAdd = () => {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setOriginalPassword('');
     setError(null);
+    setPasswordError(false);
     setShowPassword(false);
     setShowModal(true);
   };
 
   const openEdit = (user: User) => {
+    const current = user.password ?? DEFAULT_PASSWORD;
     setEditing(user);
+    setOriginalPassword(current);
     setForm({
       name: user.name,
       email: user.email,
       phone: user.phone || '',
       role: user.role,
       region: user.region,
-      password: '',
+      password: current,
     });
     setError(null);
+    setPasswordError(false);
     setShowPassword(false);
     setShowModal(true);
   };
@@ -103,8 +147,11 @@ export const AdminUsersView: React.FC = () => {
     // Checked before anything is saved, so a short password cannot leave the
     // other edits applied and the password unchanged.
     const password = form.password;
-    if ((!editing || password) && password.trim().length < MIN_PASSWORD_LENGTH) {
-      setError(`Choose a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
+    // On an edit, an untouched (or emptied) field keeps the current password.
+    const passwordChanged = !editing || (password !== '' && password !== originalPassword);
+    if (passwordChanged && password.trim().length < MIN_PASSWORD_LENGTH) {
+      setPasswordError(true);
+      passwordRef.current?.focus();
       return;
     }
 
@@ -119,9 +166,15 @@ export const AdminUsersView: React.FC = () => {
     try {
       if (editing) {
         tenderRepository.updateUser(currentUser, editing.id, payload);
-        if (password) tenderRepository.setPassword(currentUser, editing.id, password);
+        if (passwordChanged) tenderRepository.setPassword(currentUser, editing.id, password);
+        setNotice(
+          passwordChanged
+            ? `Password updated for ${payload.name}. They now sign in as ${payload.email} with the new password.`
+            : `Saved changes to ${payload.name}.`
+        );
       } else {
         tenderRepository.createUser(currentUser, { ...payload, password, isActive: true });
+        setNotice(`${payload.name} added. They sign in as ${payload.email} with the password you set.`);
       }
       setShowModal(false);
       setEditing(null);
@@ -186,10 +239,10 @@ export const AdminUsersView: React.FC = () => {
     <div className="space-y-6 pb-20 max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-base font-semibold text-slate-900">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             Tendering Department — Roles &amp; Access
           </h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500 mt-1">
             Manager, Admin 1 and Admin 2 monitor the whole department. Sources see only their own
             assigned tenders and follow-ups.
           </p>
@@ -199,7 +252,7 @@ export const AdminUsersView: React.FC = () => {
           <button
             type="button"
             onClick={openAdd}
-            className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 cursor-pointer transition-colors"
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
           >
             <PlusCircle className="w-4 h-4" />
             <span>Add Person</span>
@@ -211,19 +264,47 @@ export const AdminUsersView: React.FC = () => {
         <div className="flex items-start gap-2.5 p-3 rounded-md bg-amber-50 border border-amber-300 text-xs text-amber-900">
           <Lock className="w-4 h-4 mt-0.5 shrink-0" />
           <span>
-            Read-only. Only the <strong>Manager (Engr. Hassan)</strong> and{' '}
-            <strong>Admin 1 (Syed Shahzaib)</strong> can add persons and edit roles &amp;
-            permissions.
+            Read-only. The <strong>Manager</strong> manages every account;{' '}
+            <strong>Admin 1</strong> manages Admin 2, salespeople and Dubai Villas staff.
           </span>
         </div>
       )}
 
+      {currentUser.role === 'ADMIN_1' && (
+        <div className="flex items-start gap-2.5 p-3 rounded-md bg-slate-50 border border-[var(--border)] text-xs text-slate-700">
+          <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0 text-[#8b151b]" />
+          <span>
+            You manage Admin 2, salespeople and Dubai Villas staff. Manager and Admin 1 accounts,
+            including your own, are changed by the Manager; change your own password from the
+            account menu.
+          </span>
+        </div>
+      )}
+
+      {notice && (
+        <div
+          role="status"
+          className="flex items-start gap-2.5 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 animate-pop-in"
+        >
+          <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" />
+          <span className="flex-1">{notice}</span>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+            className="p-0.5 rounded text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Department roster */}
-      <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
+      <div className="bg-white rounded-xl border border-[var(--border)] overflow-hidden shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-300 bg-gray-50 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
+              <tr className="border-b border-[var(--border)] bg-slate-50/80 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
                 <th className="p-3">Person</th>
                 <th className="p-3">Role</th>
                 <th className="p-3">Access</th>
@@ -235,9 +316,11 @@ export const AdminUsersView: React.FC = () => {
                 <th className="p-3 text-center">Delete</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {roster.map((u) => {
                 const isSelf = u.id === currentUser.id;
+                // Whether I may change this particular person at all.
+                const editable = canManagePerson(currentUser, u);
                 return (
                   <tr
                     key={u.id}
@@ -246,7 +329,7 @@ export const AdminUsersView: React.FC = () => {
                     <td className="p-3">
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-[var(--red-100)] text-[var(--red-900)] font-semibold text-xs flex items-center justify-center">
-                          {u.name.charAt(0)}
+                          {personInitial(u.name)}
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
@@ -263,13 +346,13 @@ export const AdminUsersView: React.FC = () => {
                     </td>
 
                     <td className="p-3">
-                      {canEditPeople ? (
+                      {editable ? (
                         <select
                           value={u.role}
                           onChange={(e) => handleChangeRole(u, e.target.value as Role)}
-                          className="p-1 rounded border border-slate-400 bg-white font-semibold text-[11px]"
+                          className="p-1 rounded border border-[var(--border-strong)] bg-white font-semibold text-[11px]"
                         >
-                          {ROLE_ORDER.map((r) => (
+                          {rolesICanGive.map((r) => (
                             <option key={r} value={r}>
                               {ROLE_LABELS[r]}
                             </option>
@@ -289,11 +372,11 @@ export const AdminUsersView: React.FC = () => {
                     </td>
 
                     <td className="p-3 whitespace-nowrap">
-                      {canEditPeople && u.role !== 'DUBAI_VILLAS' ? (
+                      {editable && u.role !== 'DUBAI_VILLAS' ? (
                         <select
                           value={u.region}
                           onChange={(e) => handleChangeRegion(u, e.target.value as Region | 'ALL')}
-                          className="p-1 rounded border border-slate-400 bg-white font-medium text-[11px]"
+                          className="p-1 rounded border border-[var(--border-strong)] bg-white font-medium text-[11px]"
                         >
                           <option value="ABU_DHABI">Abu Dhabi</option>
                           <option value="DUBAI">Dubai</option>
@@ -322,7 +405,7 @@ export const AdminUsersView: React.FC = () => {
                       >
                         {u.isActive ? 'Active' : 'Disabled'}
                       </span>
-                      {canEditPeople && u.isActive && tenderRepository.usesDefaultPassword(u) && (
+                      {editable && u.isActive && tenderRepository.usesDefaultPassword(u) && (
                         <div
                           className="mt-1 text-[10px] font-semibold text-amber-700 whitespace-nowrap"
                           title="Still signs in with the starting password. Set one of their own with Edit."
@@ -333,7 +416,16 @@ export const AdminUsersView: React.FC = () => {
                     </td>
 
                     <td className="p-2 text-center">
-                      {canEditPeople && (
+                      {canEditPeople && !editable && (
+                        <span
+                          className="inline-flex p-1.5 text-slate-300"
+                          title="Only the Manager can change Manager and Admin 1 accounts."
+                          aria-label="Only the Manager can change this account"
+                        >
+                          <Lock className="w-4 h-4" />
+                        </span>
+                      )}
+                      {editable && (
                         <button
                           type="button"
                           onClick={() => openEdit(u)}
@@ -347,7 +439,7 @@ export const AdminUsersView: React.FC = () => {
                     </td>
 
                     <td className="p-2 text-center">
-                      {canEditPeople && (
+                      {editable && (
                           <button
                             type="button"
                             onClick={() => handleToggleActive(u)}
@@ -370,7 +462,7 @@ export const AdminUsersView: React.FC = () => {
                     </td>
 
                     <td className="p-2 text-center">
-                      {canEditPeople && (
+                      {editable && (
                           <button
                             type="button"
                             onClick={() => handleDelete(u)}
@@ -391,12 +483,12 @@ export const AdminUsersView: React.FC = () => {
       </div>
 
       {/* Access structure reference */}
-      <div className="bg-white rounded-md border border-[var(--border)] p-4 space-y-3">
+      <div className="bg-white rounded-xl border border-[var(--border)] p-4 space-y-3 shadow-card">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-900">
           <ShieldCheck className="w-4 h-4 text-[#8b151b]" />
           <span>Access Structure</span>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="stagger grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {ROLE_ORDER.map((r) => (
             <div key={r} className={`rounded-md border p-3 ${ROLE_BADGE[r]}`}>
               <div className="text-[11px] font-bold uppercase tracking-wider">{ROLE_LABELS[r]}</div>
@@ -414,8 +506,8 @@ export const AdminUsersView: React.FC = () => {
 
       {/* Add / Edit Person Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-md shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-[2px] p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4 animate-pop-in">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="text-sm font-bold text-gray-900">
                 {editing ? `Edit ${editing.name}` : 'Add Person to Tendering Department'}
@@ -446,7 +538,7 @@ export const AdminUsersView: React.FC = () => {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="e.g. Engr. Tariq Mahmoud"
-                  className="w-full p-2 rounded-md border border-slate-400"
+                  className="w-full p-2 rounded-md border border-[var(--border-strong)]"
                 />
               </div>
 
@@ -460,7 +552,7 @@ export const AdminUsersView: React.FC = () => {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   placeholder="tariq@inspire.ae"
-                  className="w-full p-2 rounded-md border border-slate-400"
+                  className="w-full p-2 rounded-md border border-[var(--border-strong)]"
                 />
               </div>
 
@@ -473,7 +565,7 @@ export const AdminUsersView: React.FC = () => {
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   placeholder="+971 50 123 4567"
-                  className="w-full p-2 rounded-md border border-slate-400"
+                  className="w-full p-2 rounded-md border border-[var(--border-strong)]"
                 />
               </div>
 
@@ -482,7 +574,7 @@ export const AdminUsersView: React.FC = () => {
                   htmlFor="person-password"
                   className="block text-[11px] font-semibold text-gray-700 mb-1"
                 >
-                  {editing ? 'New Password' : 'Password *'}
+                  {editing ? 'Password' : 'Password *'}
                 </label>
                 <div className="relative">
                   <KeyRound className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
@@ -491,14 +583,20 @@ export const AdminUsersView: React.FC = () => {
                     type={showPassword ? 'text' : 'password'}
                     required={!editing}
                     autoComplete="new-password"
+                    ref={passwordRef}
                     value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    onChange={(e) => {
+                      setForm({ ...form, password: e.target.value });
+                      if (e.target.value.trim().length >= MIN_PASSWORD_LENGTH) setPasswordError(false);
+                    }}
+                    aria-invalid={passwordError}
+                    aria-describedby="person-password-rule"
                     placeholder={
-                      editing
-                        ? 'Leave blank to keep the current password'
-                        : `At least ${MIN_PASSWORD_LENGTH} characters`
+                      editing ? 'Blank keeps the current password' : `At least ${MIN_PASSWORD_LENGTH} characters`
                     }
-                    className="w-full p-2 pl-7 pr-9 rounded-md border border-slate-400"
+                    className={`w-full p-2 pl-7 pr-9 rounded-md border ${
+                      passwordError ? 'border-red-500 bg-red-50/40' : 'border-[var(--border-strong)]'
+                    }`}
                   />
                   <button
                     type="button"
@@ -509,9 +607,46 @@ export const AdminUsersView: React.FC = () => {
                     {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </button>
                 </div>
+                {(() => {
+                  const length = form.password.trim().length;
+                  const ok = length >= MIN_PASSWORD_LENGTH;
+                  // On an edit, the current password (or a blank field) is kept, so there is nothing to check.
+                  const idle = !!editing && (form.password === '' || form.password === originalPassword);
+                  const tone = idle
+                    ? 'text-gray-500'
+                    : ok
+                    ? 'text-emerald-700'
+                    : passwordError
+                    ? 'text-red-700 font-semibold'
+                    : 'text-gray-500';
+                  const Icon = idle ? null : ok ? Check : passwordError ? CircleAlert : null;
+                  return (
+                    <p
+                      id="person-password-rule"
+                      role={passwordError ? 'alert' : undefined}
+                      className={`mt-1.5 flex items-center gap-1.5 text-[11px] transition-colors ${tone}`}
+                    >
+                      {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
+                      <span>
+                        {idle
+                          ? originalPassword === DEFAULT_PASSWORD
+                            ? 'Current password: the shared starting password. Type a new one to give them their own.'
+                            : 'Current password, unchanged. Type a new one to replace it.'
+                          : passwordError && !ok
+                          ? `Too short — use at least ${MIN_PASSWORD_LENGTH} characters, for example Inspire2026.`
+                          : `New password: at least ${MIN_PASSWORD_LENGTH} characters`}
+                      </span>
+                      {!idle && (
+                        <span className="ml-auto font-mono tabular-nums">
+                          {Math.min(length, 99)}/{MIN_PASSWORD_LENGTH}
+                        </span>
+                      )}
+                    </p>
+                  );
+                })()}
                 <p className="mt-1 text-[10.5px] text-gray-500 leading-snug">
                   {editing
-                    ? 'Set this to reset their password. They sign in with the email above and the new password.'
+                    ? 'Use the eye to see it. A new password takes effect when you save.'
                     : 'They sign in with the email above and this password, and can change it from their account menu.'}
                 </p>
               </div>
@@ -524,9 +659,9 @@ export const AdminUsersView: React.FC = () => {
                   <select
                     value={form.role}
                     onChange={(e) => setForm({ ...form, role: e.target.value as Role })}
-                    className="w-full p-2 rounded-md border border-slate-400 bg-white"
+                    className="w-full p-2 rounded-md border border-[var(--border-strong)] bg-white"
                   >
-                    {ROLE_ORDER.map((r) => (
+                    {rolesICanGive.map((r) => (
                       <option key={r} value={r}>
                         {ROLE_LABELS[r]}
                       </option>
@@ -542,7 +677,7 @@ export const AdminUsersView: React.FC = () => {
                     value={form.role === 'DUBAI_VILLAS' ? 'DUBAI' : form.region}
                     onChange={(e) => setForm({ ...form, region: e.target.value as Region | 'ALL' })}
                     disabled={form.role === 'DUBAI_VILLAS'}
-                    className="w-full p-2 rounded-md border border-slate-400 bg-white disabled:bg-gray-100"
+                    className="w-full p-2 rounded-md border border-[var(--border-strong)] bg-white disabled:bg-gray-100"
                   >
                     <option value="ABU_DHABI">Abu Dhabi</option>
                     <option value="DUBAI">Dubai</option>
@@ -565,7 +700,7 @@ export const AdminUsersView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-md text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer"
+                  className="px-4 py-1.5 rounded-md text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer shadow-sm"
                 >
                   {editing ? 'Save Changes' : 'Create Person'}
                 </button>

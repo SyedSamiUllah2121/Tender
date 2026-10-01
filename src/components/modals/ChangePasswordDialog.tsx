@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { CheckCircle2, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { Check, CheckCircle2, Circle, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { tenderRepository, MIN_PASSWORD_LENGTH } from '../../lib/repositories/tenderRepository';
 import { useModalDismiss } from '../../lib/useModalDismiss';
 import { User } from '../../types';
@@ -72,14 +72,14 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
         autoComplete={autoComplete}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full p-2 rounded-md border border-slate-400"
+        className="w-full p-2 rounded-md border border-[var(--border-strong)]"
       />
     </div>
   );
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-[2px] p-4 animate-fade-in"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
@@ -88,7 +88,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="change-password-title"
-        className="bg-white rounded-md shadow-2xl border border-[var(--border)] max-w-sm w-full p-5 space-y-4 text-slate-900"
+        className="bg-white rounded-xl shadow-2xl border border-[var(--border)] max-w-sm w-full p-5 space-y-4 text-slate-900 animate-pop-in"
       >
         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
           <h3 id="change-password-title" className="text-sm font-bold flex items-center gap-2">
@@ -118,7 +118,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
               <button
                 type="button"
                 onClick={close}
-                className="px-4 py-1.5 rounded-md text-white font-semibold bg-[#8b151b] hover:bg-[#731217] cursor-pointer"
+                className="px-4 py-1.5 rounded-md text-white font-semibold bg-[#8b151b] hover:bg-[#731217] cursor-pointer shadow-sm"
               >
                 Done
               </button>
@@ -139,8 +139,27 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
             {field('pw-next', 'New Password', next, setNext, 'new-password')}
             {field('pw-confirm', 'Confirm New Password', confirm, setConfirm, 'new-password')}
 
-            <div className="flex items-center justify-between text-[11px] text-gray-500">
-              <span>At least {MIN_PASSWORD_LENGTH} characters.</span>
+            {/* Live checklist, so the rules are met before Save rather than after */}
+            <ul className="space-y-1 text-[11px]">
+              {[
+                {
+                  ok: next.trim().length >= MIN_PASSWORD_LENGTH,
+                  label: `At least ${MIN_PASSWORD_LENGTH} characters (${Math.min(next.trim().length, 99)}/${MIN_PASSWORD_LENGTH})`,
+                },
+                { ok: next.length > 0 && next === confirm, label: 'Both new passwords match' },
+                { ok: next.length > 0 && next !== current, label: 'Different from the current password' },
+              ].map((rule) => (
+                <li
+                  key={rule.label.slice(0, 12)}
+                  className={`flex items-center gap-1.5 transition-colors ${rule.ok ? 'text-emerald-700' : 'text-gray-500'}`}
+                >
+                  {rule.ok ? <Check className="w-3.5 h-3.5" /> : <Circle className="w-3 h-3 mx-px" />}
+                  {rule.label}
+                </li>
+              ))}
+            </ul>
+
+            <div className="flex items-center justify-end text-[11px] text-gray-500">
               <button
                 type="button"
                 onClick={() => setShow((v) => !v)}
@@ -161,7 +180,7 @@ export const ChangePasswordDialog: React.FC<ChangePasswordDialogProps> = ({
               </button>
               <button
                 type="submit"
-                className="px-4 py-1.5 rounded-md text-white font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer"
+                className="px-4 py-1.5 rounded-md text-white font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer shadow-sm"
               >
                 Change Password
               </button>

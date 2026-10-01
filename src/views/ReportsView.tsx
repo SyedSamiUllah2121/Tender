@@ -27,6 +27,17 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '../context/AuthContext';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { fromFils, formatAED } from '../lib/money';
+import {
+  ChartTooltip,
+  RESIZE_DEBOUNCE,
+  SMOOTH,
+  TOOLTIP_ORDER,
+  axisProps,
+  barCursor,
+  gridProps,
+  legendProps,
+  DeferredChart,
+} from '../components/charts/chartKit';
 
 export const ReportsView: React.FC = () => {
   const { currentUser, dataVersion } = useAuth();
@@ -38,13 +49,24 @@ export const ReportsView: React.FC = () => {
 
   const NO_CONSULTANT = 'Direct / No Consultant';
 
+  const allTenders = useMemo(
+    () => tenderRepository.getTenders(currentUser),
+    [currentUser, dataVersion]
+  );
+
+  // The years the data actually covers, newest first.
+  const yearOptions = useMemo(() => {
+    const set = new Set<number>();
+    allTenders.forEach((t) => t.fiscalYear && set.add(t.fiscalYear));
+    return Array.from(set).sort((a, b) => b - a);
+  }, [allTenders]);
+
   // Everything in scope for the chosen year, before the name filters. The name
   // dropdowns are built from this, so they only ever offer names that exist.
   const yearTenders = useMemo(() => {
-    const list = tenderRepository.getTenders(currentUser);
-    if (selectedYear === 'ALL') return list;
-    return list.filter((t) => t.fiscalYear === parseInt(selectedYear, 10));
-  }, [currentUser, dataVersion, selectedYear]);
+    if (selectedYear === 'ALL') return allTenders;
+    return allTenders.filter((t) => t.fiscalYear === parseInt(selectedYear, 10));
+  }, [allTenders, selectedYear]);
 
   const consultantOptions = useMemo(() => {
     const names = new Set<string>();
@@ -98,13 +120,22 @@ export const ReportsView: React.FC = () => {
       UNSPECIFIED: '#cbd5e1',
     };
 
-    return Object.entries(map).map(([name, value]) => ({
-      key: name,
-      name: name.replace(/_/g, ' '),
-      value,
-      color: colors[name] || '#b8212a',
-    }));
+    const total = Object.values(map).reduce((a, b) => a + b, 0);
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .map(([name, value]) => ({
+        key: name,
+        name: name
+          .replace(/_/g, ' ')
+          .toLowerCase()
+          .replace(/^\w/, (c) => c.toUpperCase()),
+        value,
+        share: total > 0 ? Math.round((value / total) * 100) : 0,
+        color: colors[name] || '#b8212a',
+      }));
   }, [tenders]);
+
+  const rejectedTotal = rejectReasonData.reduce((sum, r) => sum + r.value, 0);
 
   // Every rejection missing a reason renders as one meaningless 100% slice.
   const onlyUnspecified =
@@ -174,7 +205,9 @@ export const ReportsView: React.FC = () => {
     const wb = XLSX.utils.book_new();
 
     // Rejection reasons sheet
-    const wsReject = XLSX.utils.json_to_sheet(rejectReasonData);
+    const wsReject = XLSX.utils.json_to_sheet(
+      rejectReasonData.map(({ key, name, value, share }) => ({ key, name, value, sharePct: share }))
+    );
     XLSX.utils.book_append_sheet(wb, wsReject, 'RejectionReasons');
 
     // Consultant conversion sheet
@@ -205,10 +238,10 @@ export const ReportsView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-base font-semibold text-slate-900">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             Commercial Analytics & Win-Loss Intelligence
           </h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500 mt-1">
             Win rates by consultant, price per square metre, and rejection reasons.
           </p>
           {nameFilterOn && (
@@ -230,7 +263,7 @@ export const ReportsView: React.FC = () => {
             <select
               value={selectedConsultant}
               onChange={(e) => setSelectedConsultant(e.target.value)}
-              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium max-w-[15rem]"
+              className="text-xs p-1.5 rounded-xl border border-[var(--border-strong)] bg-white font-medium max-w-[15rem] shadow-card"
             >
               <option value="ALL">All Consultants</option>
               {consultantOptions.map((name) => (
@@ -248,7 +281,7 @@ export const ReportsView: React.FC = () => {
             <select
               value={selectedOwner}
               onChange={(e) => setSelectedOwner(e.target.value)}
-              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium max-w-[12rem]"
+              className="text-xs p-1.5 rounded-xl border border-[var(--border-strong)] bg-white font-medium max-w-[12rem] shadow-card"
             >
               <option value="ALL">All Owners</option>
               {ownerOptions.map((name) => (
@@ -266,12 +299,14 @@ export const ReportsView: React.FC = () => {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="text-xs p-1.5 rounded-md border border-slate-400 bg-white font-medium"
+              className="text-xs p-1.5 rounded-xl border border-[var(--border-strong)] bg-white font-medium shadow-card"
             >
               <option value="ALL">All Fiscal Years</option>
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
+              {yearOptions.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}
+                </option>
+              ))}
             </select>
           </label>
 
@@ -300,9 +335,9 @@ export const ReportsView: React.FC = () => {
       </div>
 
       {/* Row 1: Rejection Reasons & Size Buckets */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="stagger grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Rejection Reasons */}
-        <div className="bg-white p-5 rounded-md border border-[var(--border)]">
+        <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-sm text-slate-900">
@@ -336,33 +371,65 @@ export const ReportsView: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={rejectReasonData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label={({ name, percent }: any) =>
-                      `${name} (${(percent * 100).toFixed(0)}%)`
-                    }
-                    labelLine={false}
-                  >
-                    {rejectReasonData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              /* A donut with the legend beside it: labels drawn on the slices
+                 collided as soon as there were more than three reasons. */
+              <div className="flex h-full w-full flex-col items-center gap-4 sm:flex-row">
+                <div className="relative h-48 w-48 shrink-0 sm:h-full sm:w-1/2">
+                  <DeferredChart order={0}>
+                    <ResponsiveContainer width="100%" height="100%" debounce={RESIZE_DEBOUNCE}>
+                    <PieChart>
+                      <Pie
+                        data={rejectReasonData}
+                        dataKey="value"
+                        nameKey="name"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius="58%"
+                        outerRadius="88%"
+                        paddingAngle={rejectReasonData.length > 1 ? 2 : 0}
+                        stroke="#ffffff"
+                        strokeWidth={2}
+                        {...SMOOTH}
+                      >
+                        {rejectReasonData.map((entry) => (
+                          <Cell key={entry.key} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip {...TOOLTIP_ORDER}
+                        content={
+                          <ChartTooltip
+                            formatValue={(v, row) => `${v} · ${row.payload?.share ?? 0}%`}
+                          />
+                        }
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  </DeferredChart>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="font-mono text-xl font-bold text-slate-900">{rejectedTotal}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500">Lost</span>
+                  </div>
+                </div>
+                <ul className="w-full space-y-1.5 text-xs sm:w-1/2">
+                  {rejectReasonData.map((r) => (
+                    <li key={r.key} className="flex items-center justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-2 text-slate-700">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
+                        <span className="truncate">{r.name}</span>
+                      </span>
+                      <span className="shrink-0 font-mono tabular-nums text-slate-900">
+                        {r.value} <span className="text-slate-400">· {r.share}%</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
           </div>
         </div>
 
         {/* Win Rate by Size Bucket */}
-        <div className="bg-white p-5 rounded-md border border-[var(--border)]">
+        <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-bold text-sm text-slate-900">
@@ -374,24 +441,46 @@ export const ReportsView: React.FC = () => {
             </div>
           </div>
 
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={sizeBucketData} barSize={24}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1eaea" />
-                <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
-                <Bar dataKey="awarded" name="Awarded" fill="#146c3f" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="rejected" name="Rejected" fill="#b8212a" radius={[4, 4, 0, 0]} />
+          {/* The title promises a win rate, so it is shown, not left to arithmetic */}
+          <div className="stagger grid grid-cols-3 gap-2 mb-3">
+            {sizeBucketData.map((b) => (
+              <div key={b.name} className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                <div className="text-[10.5px] text-slate-500 truncate">{b.name}</div>
+                <div className="font-mono text-sm font-semibold text-slate-900">
+                  {b.total > 0 ? `${b.winRate}%` : '—'}
+                  <span className="ml-1 text-[10px] font-sans font-medium text-slate-400">win</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="h-52">
+            <DeferredChart order={1}>
+              <ResponsiveContainer width="100%" height="100%" debounce={RESIZE_DEBOUNCE}>
+              <BarChart data={sizeBucketData} barSize={26} barGap={4} margin={{ left: -12, right: 8 }}>
+                <CartesianGrid {...gridProps} vertical={false} />
+                <XAxis dataKey="name" {...axisProps} />
+                <YAxis {...axisProps} allowDecimals={false} width={44} />
+                <Tooltip {...TOOLTIP_ORDER}
+                  cursor={barCursor}
+                  content={
+                    <ChartTooltip
+                      footer={(d) => (d.total > 0 ? `Win rate ${d.winRate}% of ${d.total} decided` : 'No decided bids')}
+                    />
+                  }
+                />
+                <Legend {...legendProps} />
+                <Bar dataKey="awarded" name="Awarded" fill="#146c3f" radius={[4, 4, 0, 0]} {...SMOOTH} />
+                <Bar dataKey="rejected" name="Rejected" fill="#b8212a" radius={[4, 4, 0, 0]} {...SMOOTH} />
               </BarChart>
             </ResponsiveContainer>
+            </DeferredChart>
           </div>
         </div>
       </div>
 
       {/* Row 2: Consultant Conversion Efficiency */}
-      <div className="bg-white p-5 rounded-md border border-[var(--border)]">
+      <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-bold text-sm text-slate-900">
@@ -406,7 +495,7 @@ export const ReportsView: React.FC = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-300 bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+              <tr className="border-b border-[var(--border)] bg-slate-50/80 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                 <th className="p-2.5">Consultant Engineering Firm</th>
                 <th className="p-2.5 text-center">Awarded</th>
                 <th className="p-2.5 text-center">Rejected</th>
@@ -415,7 +504,7 @@ export const ReportsView: React.FC = () => {
                 <th className="p-2.5 text-right">Quoted Volume (AED M)</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {consultantData.length === 0 && (
                 <tr>
                   <td colSpan={6} className="p-10 text-center text-gray-400">

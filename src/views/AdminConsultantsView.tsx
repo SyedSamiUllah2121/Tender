@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { can } from '../lib/permissions';
 import { AccessDenied } from '../components/ui/AccessDenied';
+import { useModalDismiss } from '../lib/useModalDismiss';
 
 export const AdminConsultantsView: React.FC = () => {
   const { currentUser, dataVersion, refreshData } = useAuth();
@@ -27,6 +28,7 @@ export const AdminConsultantsView: React.FC = () => {
   }, [currentUser, dataVersion]);
 
   const [showModal, setShowModal] = useState(false);
+  useModalDismiss(showModal, () => setShowModal(false));
   const [companyName, setCompanyName] = useState('');
   const [engineerName, setEngineerName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
@@ -57,10 +59,10 @@ export const AdminConsultantsView: React.FC = () => {
     <div className="space-y-6 pb-20 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-base font-semibold text-slate-900">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">
             Consultant Engineering Directory
           </h1>
-          <p className="text-xs text-slate-500">
+          <p className="text-sm text-slate-500 mt-1">
             Supervising consultants on file, with contacts.
           </p>
         </div>
@@ -68,18 +70,18 @@ export const AdminConsultantsView: React.FC = () => {
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 cursor-pointer transition-colors"
+          className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] flex items-center gap-1.5 cursor-pointer transition-colors shadow-sm"
         >
           <PlusCircle className="w-4 h-4" />
           <span>Add Consultant</span>
         </button>
       </div>
 
-      <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
+      <div className="bg-white rounded-xl border border-[var(--border)] overflow-hidden shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-300 bg-gray-50 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
+              <tr className="border-b border-[var(--border)] bg-slate-50/80 uppercase font-bold text-[11px] text-gray-500 tracking-wider">
                 <th className="p-3">Consultant Company</th>
                 <th className="p-3 text-center">Total Tenders</th>
                 <th className="p-3 text-center">Awarded Tenders</th>
@@ -88,7 +90,7 @@ export const AdminConsultantsView: React.FC = () => {
                 <th className="p-3">Email</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {consultants.map((c) => {
                 const tally = tallyByConsultant[c.id] ?? { total: 0, awarded: 0, rejected: 0 };
                 return (
@@ -121,8 +123,8 @@ export const AdminConsultantsView: React.FC = () => {
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
-          <div className="bg-white rounded-md shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 backdrop-blur-[2px] p-4 animate-fade-in">
+          <div className="bg-white rounded-xl shadow-2xl border border-[var(--border)] max-w-md w-full p-5 space-y-4 animate-pop-in">
             <div className="flex items-center justify-between border-b border-slate-200 pb-3">
               <h3 className="text-sm font-bold text-gray-900">Add Engineering Consultant</h3>
               <button
@@ -145,7 +147,7 @@ export const AdminConsultantsView: React.FC = () => {
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   placeholder="e.g. Diar Consultants"
-                  className="w-full p-2 rounded-md border border-slate-400"
+                  className="w-full p-2 rounded-md border border-[var(--border-strong)]"
                 />
               </div>
 
@@ -158,7 +160,7 @@ export const AdminConsultantsView: React.FC = () => {
                   value={engineerName}
                   onChange={(e) => setEngineerName(e.target.value)}
                   placeholder="e.g. Engr. Bassem"
-                  className="w-full p-2 rounded-md border border-slate-400"
+                  className="w-full p-2 rounded-md border border-[var(--border-strong)]"
                 />
               </div>
 
@@ -172,7 +174,7 @@ export const AdminConsultantsView: React.FC = () => {
                     value={contactNumber}
                     onChange={(e) => setContactNumber(e.target.value)}
                     placeholder="050-XXXXXXX"
-                    className="w-full p-2 rounded-md border border-slate-400"
+                    className="w-full p-2 rounded-md border border-[var(--border-strong)]"
                   />
                 </div>
 
@@ -185,7 +187,7 @@ export const AdminConsultantsView: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="info@consultant.ae"
-                    className="w-full p-2 rounded-md border border-slate-400"
+                    className="w-full p-2 rounded-md border border-[var(--border-strong)]"
                   />
                 </div>
               </div>
@@ -200,7 +202,7 @@ export const AdminConsultantsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-md text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer"
+                  className="px-4 py-1.5 rounded-md text-white text-xs font-semibold bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer shadow-sm"
                 >
                   Save Consultant
                 </button>

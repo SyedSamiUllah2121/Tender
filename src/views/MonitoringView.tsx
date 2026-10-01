@@ -14,6 +14,9 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { CountUp } from '../components/ui/CountUp';
+import { TabUnderline } from '../components/ui/TabUnderline';
+import { ShowMoreFooter, useShowMore } from '../components/ui/ShowMore';
 import { formatAED } from '../lib/money';
 import { can } from '../lib/permissions';
 import {
@@ -85,10 +88,11 @@ export const MonitoringView: React.FC = () => {
   }, [rows, lens, ownerFilter, search]);
 
   const byOwner = useMemo(() => breachedByOwner(rows), [rows]);
+  const page = useShowMore(visible, `${lens}|${ownerFilter}|${search}`);
 
   if (!allowed) {
     return (
-      <div className="max-w-xl mx-auto mt-10 p-6 rounded-md bg-white border border-[var(--border)] text-center space-y-2">
+      <div className="max-w-xl mx-auto mt-10 p-6 rounded-xl bg-white border border-[var(--border)] text-center space-y-2 shadow-card">
         <Lock className="w-6 h-6 mx-auto text-slate-400" />
         <h1 className="text-sm font-bold text-slate-900">Monitoring is restricted</h1>
         <p className="text-xs text-slate-500">
@@ -133,10 +137,10 @@ export const MonitoringView: React.FC = () => {
   return (
     <div className="space-y-4 pb-16">
       <div>
-        <h1 className="text-base font-semibold text-slate-900">
+        <h1 className="text-xl font-semibold tracking-tight text-slate-900">
           Management &amp; Admin Monitoring
         </h1>
-        <p className="text-xs text-slate-500">
+        <p className="text-sm text-slate-500 mt-1">
           Every active tender with its assigned salesperson, dates, follow-up history and{' '}
           {FOLLOW_UP_WINDOW_MONTHS}-month deadline. Every tender stays engaged until it is Awarded,
           Rejected, or confirmed Still Under Process.
@@ -153,15 +157,14 @@ export const MonitoringView: React.FC = () => {
               type="button"
               onClick={() => setLens(tile.id)}
               title={tile.hint}
-              className={`flex items-center gap-2 px-3 py-2 -mb-px border-b-2 text-xs transition-colors cursor-pointer ${
-                active
-                  ? 'border-[#8b151b] text-slate-900 font-medium'
-                  : 'border-transparent text-slate-500 hover:text-slate-900'
+              className={`relative flex items-center gap-2 px-3 py-2 text-xs transition-colors cursor-pointer ${
+                active ? 'text-slate-900 font-medium' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
+              {active && <TabUnderline group="monitoring-lens" />}
               <span className={`w-1.5 h-1.5 rounded-full ${tile.dot}`} />
               <span>{tile.label}</span>
-              <span className="font-mono tabular-nums text-slate-400">{tile.value}</span>
+              <span className="font-mono tabular-nums text-slate-400"><CountUp value={tile.value} /></span>
             </button>
           );
         })}
@@ -178,12 +181,12 @@ export const MonitoringView: React.FC = () => {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search tender no, client, location or salesperson..."
-          className="flex-1 text-xs p-2 rounded-md border border-slate-400 bg-white"
+          className="flex-1 text-xs p-2 rounded-xl border border-[var(--border-strong)] bg-white shadow-card"
         />
         <select
           value={ownerFilter}
           onChange={(e) => setOwnerFilter(e.target.value)}
-          className="text-xs p-2 rounded-md border border-slate-400 bg-white font-medium"
+          className="text-xs p-2 rounded-xl border border-[var(--border-strong)] bg-white font-medium shadow-card"
         >
           <option value="ALL">All salespersons</option>
           {allUsers.map((u) => (
@@ -195,7 +198,7 @@ export const MonitoringView: React.FC = () => {
         <select
           value={lens}
           onChange={(e) => setLens(e.target.value as Lens)}
-          className="text-xs p-2 rounded-md border border-slate-400 bg-white font-medium"
+          className="text-xs p-2 rounded-xl border border-[var(--border-strong)] bg-white font-medium shadow-card"
         >
           <option value="ACTIVE">Active pipeline</option>
           <option value="OVERDUE">Pending / overdue follow-ups</option>
@@ -207,7 +210,7 @@ export const MonitoringView: React.FC = () => {
 
       {/* Breach load per salesperson */}
       {byOwner.length > 0 && (
-        <div className="bg-white rounded-md border border-[var(--border)] p-3">
+        <div className="bg-white rounded-xl border border-[var(--border)] p-3 shadow-card">
           <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500 mb-2">
             <Users className="w-3.5 h-3.5" />
             <span>Awaiting a clear status, by salesperson</span>
@@ -231,11 +234,11 @@ export const MonitoringView: React.FC = () => {
       )}
 
       {/* Monitoring table */}
-      <div className="bg-white rounded-md border border-[var(--border)] overflow-hidden">
+      <div className="bg-white rounded-xl border border-[var(--border)] overflow-hidden shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
-              <tr className="border-b border-slate-300 bg-gray-50 uppercase font-bold text-[10.5px] text-gray-500 tracking-wider whitespace-nowrap">
+              <tr className="border-b border-[var(--border)] bg-slate-50/80 uppercase font-bold text-[10.5px] text-gray-500 tracking-wider whitespace-nowrap">
                 <th className="p-3">Tender</th>
                 <th className="p-3">Assigned Salesperson</th>
                 <th className="p-3">Submitted</th>
@@ -248,7 +251,7 @@ export const MonitoringView: React.FC = () => {
                 <th className="p-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-[var(--border-subtle)]">
               {visible.length === 0 ? (
                 <tr>
                   <td colSpan={10} className="p-12 text-center text-xs text-gray-400">
@@ -256,12 +259,12 @@ export const MonitoringView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                visible.map((r) => {
+                page.visible.map((r) => {
                   const style = STATE_STYLE[r.state];
                   return (
                     <tr
                       key={r.tender.id}
-                      className={`hover:bg-gray-50 transition ${
+                      className={`row-enter hover:bg-gray-50 transition ${
                         r.state === 'BREACHED' ? 'bg-red-50' : ''
                       }`}
                     >
@@ -352,10 +355,22 @@ export const MonitoringView: React.FC = () => {
             </tbody>
           </table>
         </div>
+        {page.hasMore && (
+          <div className="border-t border-slate-200">
+            <ShowMoreFooter
+              shown={page.shown}
+              total={page.total}
+              step={page.step}
+              onMore={page.showMore}
+              onAll={page.showAll}
+              noun="tenders"
+            />
+          </div>
+        )}
       </div>
 
       <p className="text-[11px] text-slate-400">
-        Showing {visible.length} of {rows.length} tenders in scope.
+        {visible.length} of {rows.length} tenders in scope match this view.
       </p>
     </div>
   );

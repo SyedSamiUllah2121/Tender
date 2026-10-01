@@ -1,5 +1,90 @@
 @import "tailwindcss";
 
+/*
+  Theme scale. Every screen styles itself with Tailwind utilities, so the
+  shape of the whole app is set here: corners a step rounder, a soft card
+  shadow, and motion for overlays.
+*/
+@theme {
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --shadow-card-hover: 0 2px 4px rgba(15, 23, 42, 0.05), 0 6px 16px rgba(15, 23, 42, 0.07);
+  --shadow-pop: 0 10px 30px -8px rgba(15, 23, 42, 0.22), 0 2px 6px rgba(15, 23, 42, 0.06);
+
+  --animate-fade-in: fade-in 160ms ease-out;
+  --animate-pop-in: pop-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-rise-in: rise-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  --animate-slide-in-right: slide-in-right 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  --animate-shimmer: shimmer 1.4s linear infinite;
+  --animate-soft-ping: soft-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes soft-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  80%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 :root {
   --font-sans: var(--font-jakarta), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -12,11 +97,13 @@
   --brand-border: #fca5a5;
   --brand-ring: rgba(139, 21, 27, 0.2);
 
-  /* Sophisticated Modern Slate Neutrals */
-  --bg-canvas: #f8fafc;
+  /* Neutrals. The canvas sits a shade below white so white cards lift off it
+     without heavy borders. */
+  --bg-canvas: #f4f6f9;
   --card: #ffffff;
-  --border: #cbd5e1;
-  --border-subtle: #e2e8f0;
+  --border: #e2e6ec;
+  --border-subtle: #edf0f4;
+  --border-strong: #cbd5e1;
   --text-900: #0f172a;
   --text-700: #334155;
   --text-500: #64748b;
@@ -91,6 +178,173 @@ body {
 .on-brand :focus-visible,
 aside :focus-visible {
   outline-color: #ffffff;
+}
+
+/*
+  Form fields. These rules sit outside Tailwind's layers on purpose: unlayered
+  CSS wins over utilities, so every field across the app gets the same focus
+  ring and dropdown arrow without touching each screen's markup.
+*/
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+select,
+textarea {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']):focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--brand-primary);
+  box-shadow: 0 0 0 3px var(--brand-ring);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-400);
+}
+
+/* The native Windows arrow looks dated; a quiet chevron replaces it. */
+select:not([multiple]):not([size]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2364748b'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  background-size: 1rem;
+  padding-right: 2rem;
+  cursor: pointer;
+}
+select:disabled {
+  cursor: not-allowed;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--brand-primary);
+}
+
+/* Table headers: a touch lighter and more open than bold caps. */
+thead th {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+/*
+  Motion. A page's top-level sections rise in one after another when it
+  opens; the shell keys .page-enter on the route, so this runs on every
+  navigation. `backwards` fill (not `both`) matters: a transform left on a
+  section after its animation would trap any fixed dialog inside it.
+  Fixed overlays are excluded so a dialog never waits on a stagger delay.
+*/
+.page-enter {
+  animation: fade-in 200ms ease-out;
+}
+.page-enter > * > :not(.fixed) {
+  animation: rise-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.page-enter > * > :nth-child(2) { animation-delay: 40ms; }
+.page-enter > * > :nth-child(3) { animation-delay: 80ms; }
+.page-enter > * > :nth-child(4) { animation-delay: 120ms; }
+.page-enter > * > :nth-child(5) { animation-delay: 160ms; }
+.page-enter > * > :nth-child(6) { animation-delay: 200ms; }
+.page-enter > * > :nth-child(n + 7) { animation-delay: 240ms; }
+
+/* Cards inside a grid follow each other in, a beat apart. */
+.stagger > * {
+  animation: rise-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+.stagger > :nth-child(2) { animation-delay: 50ms; }
+.stagger > :nth-child(3) { animation-delay: 100ms; }
+.stagger > :nth-child(4) { animation-delay: 150ms; }
+.stagger > :nth-child(5) { animation-delay: 200ms; }
+.stagger > :nth-child(n + 6) { animation-delay: 250ms; }
+
+/* Cards answer the pointer; only the clickable ones lift. */
+.shadow-card {
+  transition: box-shadow 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+button.shadow-card:hover,
+a.shadow-card:hover,
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* Buttons give under the finger. */
+button:not(:disabled),
+a[role='button'] {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+/* Large rows and cards that are buttons would lurch at 0.97. */
+button.w-full:not(:disabled):active,
+button.shadow-card:not(:disabled):active {
+  transform: scale(0.995);
+}
+
+/* Scatter points pop in, overshooting slightly, and swell under the pointer.
+   transform-box makes an SVG circle scale about its own centre. */
+.scatter-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: dot-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+  transition: transform 0.15s ease, fill-opacity 0.15s ease;
+}
+.scatter-dot:hover {
+  transform: scale(1.8);
+  fill-opacity: 1;
+}
+@keyframes dot-in {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The threshold line draws in once the dots have landed. */
+.threshold-line {
+  animation: fade-in 450ms ease-out 650ms backwards;
+}
+
+/* Rows fade in when they appear, for instance after "Show more". */
+.row-enter {
+  animation: fade-in 260ms ease-out backwards;
+}
+
+/* Loading placeholders. */
+.skeleton {
+  background: linear-gradient(90deg, #eef1f5 25%, #f7f9fb 37%, #eef1f5 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s linear infinite;
+  border-radius: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Number columns line up, and no figure jitters while values update. */
+.tabular-nums,
+td.font-mono {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Subtle, minimalist scrollbar */

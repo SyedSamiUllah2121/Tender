@@ -13,7 +13,7 @@ export const AccessDenied: React.FC<{ requirement: string }> = ({ requirement })
   const { currentUser } = useAuth();
 
   return (
-    <div className="max-w-xl mx-auto mt-10 p-6 rounded-md bg-white border border-[var(--border)] text-center space-y-2">
+    <div className="max-w-xl mx-auto mt-10 p-6 rounded-xl bg-white border border-[var(--border)] text-center space-y-2 shadow-card">
       <Lock className="w-6 h-6 mx-auto text-slate-400" />
       <h1 className="text-sm font-bold text-slate-900">This area is restricted</h1>
       <p className="text-xs text-slate-500">

@@ -1,20 +1,26 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   TrendingUp,
-  AlertTriangle,
-  Clock,
+  TrendingDown,
   ArrowUpRight,
-  ShieldAlert,
+  FileText,
+  Banknote,
+  Activity,
+  Trophy,
+  XCircle,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
+  AreaChart,
+  Area,
   BarChart,
   Bar,
   XAxis,
   YAxis,
+  ZAxis,
   Tooltip,
   Legend,
   CartesianGrid,
@@ -22,11 +28,30 @@ import {
   Scatter,
   ReferenceLine,
 } from 'recharts';
+import {
+  AreaGradient,
+  CHART_COLORS,
+  ChartEmpty,
+  ChartTooltip,
+  RESIZE_DEBOUNCE,
+  SMOOTH,
+  TOOLTIP_ORDER,
+  TruncatedTick,
+  axisProps,
+  barCursor,
+  compactNumber,
+  gridProps,
+  legendProps,
+  lineCursor,
+  popDot,
+  DeferredChart,
+} from '../components/charts/chartKit';
 import { useAuth } from '../context/AuthContext';
 import { tenderRepository } from '../lib/repositories/tenderRepository';
 import { formatCompact, formatAED, fromFils } from '../lib/money';
 import { pricePerSqm } from '../lib/derive';
 import { StatusBadge } from '../components/ui/StatusBadge';
+import { CountUp } from '../components/ui/CountUp';
 import { hasFullAccess } from '../lib/permissions';
 import { ACTIVE_STATUSES, FOLLOW_UP_WINDOW_MONTHS, isPastFollowUpWindow } from '../lib/followUpPolicy';
 
@@ -53,7 +78,16 @@ export const DashboardView: React.FC = () => {
     return baseTenders;
   }, [baseTenders, currentUser, myTendersOnly]);
 
-  const now = new Date();
+  // One clock per data refresh. A fresh Date on every render made each memo
+  // below recompute on every keystroke and hover.
+  const now = useMemo(() => new Date(), [dataVersion]);
+
+  // The funnel bars grow from zero once, rather than appearing at full width.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
   // Alert Strip calculations
   const overdueFollowUps = useMemo(() => {
@@ -86,12 +120,20 @@ export const DashboardView: React.FC = () => {
 
   // KPI Calculations
   const kpi = useMemo(() => {
-    const currentYear = 2026;
-    const lastYear = 2025;
-
     const totalCount = tenders.length;
-    const totalCountLastYear = tenders.filter((t) => t.fiscalYear === lastYear).length;
-    const totalCountThisYear = tenders.filter((t) => t.fiscalYear === currentYear).length;
+
+    // Year to date against the same stretch of last year. Comparing a part
+    // year with a whole one always looks like a decline.
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const lastYearStart = new Date(now.getFullYear() - 1, 0, 1);
+    const lastYearSameDay = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate(), 23, 59, 59);
+    let thisYtd = 0;
+    let lastYtd = 0;
+    tenders.forEach((t) => {
+      const d = new Date(t.receivedAt);
+      if (d >= yearStart && d <= now) thisYtd++;
+      else if (d >= lastYearStart && d <= lastYearSameDay) lastYtd++;
+    });
 
     const totalValFils = tenders.reduce((acc, t) => acc + (t.tenderAmount || 0n), 0n);
 
@@ -125,33 +167,36 @@ export const DashboardView: React.FC = () => {
       rejectedCount,
       rejectedValFils,
       winRate,
-      growth: totalCountLastYear > 0 ? Math.round(((totalCountThisYear - totalCountLastYear) / totalCountLastYear) * 100) : 12,
+      growth: lastYtd > 0 ? Math.round(((thisYtd - lastYtd) / lastYtd) * 100) : null,
     };
-  }, [tenders]);
+  }, [tenders, now]);
 
-  // Chart 1: Monthly Tender Volume (last 6 months)
+  // Chart 1: Monthly Tender Volume (last 12 months). Six months of bars was
+  // too short to show a trend; twelve as curves reads at a glance.
   const monthlyVolumeData = useMemo(() => {
-    const monthsMap: Record<string, { month: string; submitted: number; awarded: number; rejected: number }> = {};
+    const monthsMap: Record<string, { month: string; received: number; awarded: number; rejected: number }> = {};
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`;
-      monthsMap[key] = { month: key, submitted: 0, awarded: 0, rejected: 0 };
+      monthsMap[key] = { month: key, received: 0, awarded: 0, rejected: 0 };
     }
 
     tenders.forEach((t) => {
       const d = new Date(t.receivedAt);
       const key = `${monthNames[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`;
       if (monthsMap[key]) {
-        if (t.status === 'SUBMITTED' || t.status === 'UNDER_REVIEW') monthsMap[key].submitted++;
-        else if (t.status === 'AWARDED') monthsMap[key].awarded++;
+        monthsMap[key].received++;
+        if (t.status === 'AWARDED') monthsMap[key].awarded++;
         else if (t.status === 'REJECTED') monthsMap[key].rejected++;
       }
     });
 
     return Object.values(monthsMap);
   }, [tenders, now]);
+
+  const receivedInPeriod = monthlyVolumeData.reduce((sum, m) => sum + m.received, 0);
 
   // Chart 2: Pipeline Funnel (Submitted -> Under Review -> Awarded)
   const funnelData = useMemo(() => {
@@ -253,12 +298,24 @@ export const DashboardView: React.FC = () => {
     return { awarded, rejected };
   }, [tenders, scatterLocation, scatterYear]);
 
-  // Unique locations for scatter filter
+  // Unique locations and years for the scatter filters, from the data itself
   const uniqueLocations = useMemo(() => {
     const set = new Set<string>();
     tenders.forEach((t) => set.add(t.location));
     return Array.from(set).sort();
   }, [tenders]);
+
+  const uniqueYears = useMemo(() => {
+    const set = new Set<number>();
+    tenders.forEach((t) => t.fiscalYear && set.add(t.fiscalYear));
+    return Array.from(set).sort((a, b) => b - a);
+  }, [tenders]);
+
+  const scatterCount = scatterPoints.awarded.length + scatterPoints.rejected.length;
+  // Each dot animates itself in CSS (popDot); Recharts' own per-point
+  // animation stutters at this many points, so it stays off.
+  const rejectedDot = useMemo(() => popDot(CHART_COLORS.rejected, 0.5), []);
+  const awardedDot = useMemo(() => popDot(CHART_COLORS.awarded, 0.85, 3.4), []);
 
   // Recent follow-ups due this week
   const followUpsDueThisWeek = useMemo(() => {
@@ -279,8 +336,8 @@ export const DashboardView: React.FC = () => {
       {/* Top Banner with Scope & My Tenders Toggle */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
-          <h1 className="text-base font-semibold text-slate-900">Dashboard</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-1">
             Abu Dhabi &amp; Dubai · {kpi.totalCount} tenders
           </p>
         </div>
@@ -301,7 +358,7 @@ export const DashboardView: React.FC = () => {
           <button
             type="button"
             onClick={() => router.push('/tenders')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-[#8b151b] hover:bg-[#731217] transition-colors cursor-pointer shadow-sm"
           >
             <span>View All Tenders</span>
             <ArrowUpRight className="w-3.5 h-3.5" />
@@ -314,15 +371,15 @@ export const DashboardView: React.FC = () => {
         pastFollowUpWindow.length > 0 ||
         noActivity45Days.length > 0 ||
         awardedMissingContractDate.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="stagger grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
           {pastFollowUpWindow.length > 0 && (
             <button
               type="button"
               onClick={() => router.push('/followups')}
-              className="text-left bg-white border border-slate-300 border-l-2 border-l-[#8b151b] rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+              className="text-left bg-white border border-[var(--border)] border-l-[3px] border-l-[#8b151b] rounded-xl shadow-card hover:shadow-card-hover px-4 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <span className="text-lg font-semibold font-mono text-[#8b151b] tabular-nums leading-none">
-                {pastFollowUpWindow.length}
+                <CountUp value={pastFollowUpWindow.length} />
               </span>
               <span className="min-w-0">
                 <span className="block text-xs font-medium text-slate-900">Past {FOLLOW_UP_WINDOW_MONTHS}-month deadline</span>
@@ -334,10 +391,10 @@ export const DashboardView: React.FC = () => {
             <button
               type="button"
               onClick={() => router.push('/followups')}
-              className="text-left bg-white border border-slate-300 border-l-2 border-l-rose-500 rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+              className="text-left bg-white border border-[var(--border)] border-l-[3px] border-l-rose-500 rounded-xl shadow-card hover:shadow-card-hover px-4 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <span className="text-lg font-semibold font-mono text-rose-700 tabular-nums leading-none">
-                {overdueFollowUps.length}
+                <CountUp value={overdueFollowUps.length} />
               </span>
               <span className="min-w-0">
                 <span className="block text-xs font-medium text-slate-900">Overdue follow-ups</span>
@@ -349,10 +406,10 @@ export const DashboardView: React.FC = () => {
             <button
               type="button"
               onClick={() => router.push('/tenders')}
-              className="text-left bg-white border border-slate-300 border-l-2 border-l-amber-500 rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+              className="text-left bg-white border border-[var(--border)] border-l-[3px] border-l-amber-500 rounded-xl shadow-card hover:shadow-card-hover px-4 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <span className="text-lg font-semibold font-mono text-amber-700 tabular-nums leading-none">
-                {noActivity45Days.length}
+                <CountUp value={noActivity45Days.length} />
               </span>
               <span className="min-w-0">
                 <span className="block text-xs font-medium text-slate-900">No activity in 45 days</span>
@@ -364,10 +421,10 @@ export const DashboardView: React.FC = () => {
             <button
               type="button"
               onClick={() => router.push('/awarded')}
-              className="text-left bg-white border border-slate-300 border-l-2 border-l-slate-400 rounded-md px-3.5 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
+              className="text-left bg-white border border-[var(--border)] border-l-[3px] border-l-slate-400 rounded-xl shadow-card hover:shadow-card-hover px-4 py-3 flex items-baseline gap-3 cursor-pointer hover:bg-slate-50 transition-colors"
             >
               <span className="text-lg font-semibold font-mono text-slate-700 tabular-nums leading-none">
-                {awardedMissingContractDate.length}
+                <CountUp value={awardedMissingContractDate.length} />
               </span>
               <span className="min-w-0">
                 <span className="block text-xs font-medium text-slate-900">Missing contract date</span>
@@ -378,28 +435,46 @@ export const DashboardView: React.FC = () => {
         </div>
       )}
 
-      {/* Minimalist Metric Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3.5">
+      {/* Metric cards */}
+      <div className="stagger grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* Total Tenders */}
-        <div className="bg-white p-4.5 rounded-md border border-slate-300">
-          <div className="text-[11px] font-medium text-slate-400">
-            Total Tenders
+        <div className="bg-white p-4.5 rounded-xl border border-[var(--border)] shadow-card">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500">Total Tenders</span>
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-slate-100 text-slate-600">
+              <FileText className="w-3.5 h-3.5" />
+            </span>
           </div>
-          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
-            {kpi.totalCount}
+          <div className="text-xl sm:text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
+            <CountUp value={kpi.totalCount} />
           </div>
-          <div className="text-[11px] text-emerald-600 font-medium mt-1 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" />
-            <span>+{kpi.growth}% YoY volume</span>
-          </div>
+          {kpi.growth === null ? (
+            <div className="text-[11px] text-slate-400 font-medium mt-1">No prior-year data</div>
+          ) : (
+            <div
+              className={`text-[11px] font-medium mt-1 flex items-center gap-1 ${
+                kpi.growth >= 0 ? 'text-emerald-600' : 'text-rose-600'
+              }`}
+              title="Tenders received this year to date, against the same period last year"
+            >
+              {kpi.growth >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              <span>
+                {kpi.growth >= 0 ? '+' : ''}
+                {kpi.growth}% vs last year
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Total Tender Value */}
-        <div className="bg-white p-4.5 rounded-md border border-slate-300">
-          <div className="text-[11px] font-medium text-slate-400">
-            Total Quoted Value
+        <div className="bg-white p-4.5 rounded-xl border border-[var(--border)] shadow-card">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500">Total Quoted Value</span>
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-[var(--red-50)] text-[#8b151b]">
+              <Banknote className="w-3.5 h-3.5" />
+            </span>
           </div>
-          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
+          <div className="text-xl sm:text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
             {formatCompact(kpi.totalValFils)}
           </div>
           <div className="text-[11px] text-slate-500 mt-1 font-mono">
@@ -408,12 +483,15 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Active Pipeline */}
-        <div className="bg-white p-4.5 rounded-md border border-slate-300">
-          <div className="text-[11px] font-medium text-slate-400">
-            Active Pipeline
+        <div className="bg-white p-4.5 rounded-xl border border-[var(--border)] shadow-card">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500">Active Pipeline</span>
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
+              <Activity className="w-3.5 h-3.5" />
+            </span>
           </div>
-          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
-            {kpi.activeCount}
+          <div className="text-xl sm:text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
+            <CountUp value={kpi.activeCount} />
           </div>
           <div className="text-[11px] text-blue-600 font-medium mt-1 font-mono">
             {formatCompact(kpi.activeValFils)} in review
@@ -421,14 +499,17 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Awarded */}
-        <div className="bg-white p-4.5 rounded-md border border-slate-300">
-          <div className="text-[11px] font-medium text-slate-400">
-            Awarded Contracts
+        <div className="bg-white p-4.5 rounded-xl border border-[var(--border)] shadow-card">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500">Awarded Contracts</span>
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-emerald-50 text-emerald-600">
+              <Trophy className="w-3.5 h-3.5" />
+            </span>
           </div>
-          <div className="text-2xl font-bold tracking-tight text-slate-900 mt-1 flex items-baseline gap-2 font-mono">
-            <span>{kpi.awardedCount}</span>
-            <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-300">
-              {kpi.winRate}% win
+          <div className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 mt-1 flex items-baseline gap-2 font-mono tabular-nums">
+            <span><CountUp value={kpi.awardedCount} /></span>
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <CountUp value={kpi.winRate} />% win
             </span>
           </div>
           <div className="text-[11px] text-emerald-600 font-medium mt-1 font-mono">
@@ -437,12 +518,15 @@ export const DashboardView: React.FC = () => {
         </div>
 
         {/* Rejected */}
-        <div className="bg-white p-4.5 rounded-md border border-slate-300">
-          <div className="text-[11px] font-medium text-slate-400">
-            Lost / Rejected
+        <div className="bg-white p-4.5 rounded-xl border border-[var(--border)] shadow-card">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-xs font-medium text-slate-500">Lost / Rejected</span>
+            <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-rose-50 text-rose-600">
+              <XCircle className="w-3.5 h-3.5" />
+            </span>
           </div>
-          <div className="text-xl font-semibold text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
-            {kpi.rejectedCount}
+          <div className="text-xl sm:text-xl sm:text-2xl font-semibold tracking-tight text-slate-900 mt-1 font-mono tabular-nums whitespace-nowrap">
+            <CountUp value={kpi.rejectedCount} />
           </div>
           <div className="text-[11px] text-slate-400 font-medium mt-1 font-mono">
             {formatCompact(kpi.rejectedValFils)} lost value
@@ -451,49 +535,80 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* Row 1 Charts: Monthly Volume & Pipeline Funnel */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="stagger grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Monthly Volume */}
-        <div className="lg:col-span-2 bg-white p-5 rounded-md border border-slate-300">
+        <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-semibold text-sm text-slate-900">
-                Monthly Tender Volume (Last 6 Months)
+                Monthly Tender Volume (Last 12 Months)
               </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Submissions, awarded projects, and rejected bids by month
+                Tenders received each month, and how many of them were awarded or rejected
               </p>
             </div>
-            <span className="text-[10.5px] font-mono font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
-              Volume Count
+            <span className="text-[10.5px] font-mono font-medium px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 whitespace-nowrap">
+              {receivedInPeriod} received
             </span>
           </div>
 
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyVolumeData} barSize={16}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e2e8f0',
-                    borderRadius: '8px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.06)',
-                    fontSize: '12px',
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
-                <Bar dataKey="submitted" name="Submitted" fill="#8b151b" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="awarded" name="Awarded" fill="#10b981" radius={[3, 3, 0, 0]} />
-                <Bar dataKey="rejected" name="Rejected" fill="#f43f5e" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {receivedInPeriod === 0 ? (
+              <ChartEmpty message="No tenders received in the last 12 months." />
+            ) : (
+              <DeferredChart order={0}>
+                <ResponsiveContainer width="100%" height="100%" debounce={RESIZE_DEBOUNCE}>
+                <AreaChart data={monthlyVolumeData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+                  <defs>
+                    <AreaGradient id="grad-received" color={CHART_COLORS.brand} />
+                    <AreaGradient id="grad-awarded" color={CHART_COLORS.awarded} />
+                    <AreaGradient id="grad-rejected" color={CHART_COLORS.rejected} />
+                  </defs>
+                  <CartesianGrid {...gridProps} vertical={false} />
+                  <XAxis dataKey="month" {...axisProps} interval="preserveStartEnd" minTickGap={12} />
+                  <YAxis {...axisProps} allowDecimals={false} width={44} />
+                  <Tooltip {...TOOLTIP_ORDER} cursor={lineCursor} content={<ChartTooltip />} />
+                  <Legend {...legendProps} />
+                  <Area
+                    type="monotone"
+                    dataKey="received"
+                    name="Received"
+                    stroke={CHART_COLORS.brand}
+                    strokeWidth={2}
+                    fill="url(#grad-received)"
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    {...SMOOTH}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="awarded"
+                    name="Awarded"
+                    stroke={CHART_COLORS.awarded}
+                    strokeWidth={2}
+                    fill="url(#grad-awarded)"
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    {...SMOOTH}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="rejected"
+                    name="Rejected"
+                    stroke={CHART_COLORS.rejected}
+                    strokeWidth={2}
+                    strokeDasharray="5 3"
+                    fill="url(#grad-rejected)"
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                    {...SMOOTH}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+              </DeferredChart>
+            )}
           </div>
         </div>
 
         {/* Pipeline Funnel */}
-        <div className="bg-white p-5 rounded-md border border-slate-300 flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-xl border border-[var(--border)] flex flex-col justify-between shadow-card">
           <div>
             <h3 className="font-semibold text-sm text-slate-900">
               Tender Conversion Funnel
@@ -512,9 +627,14 @@ export const DashboardView: React.FC = () => {
                 </div>
                 <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                   <div
-                    className="h-full transition-all rounded-full"
+                    className="h-full rounded-full transition-[width] duration-700 ease-out"
                     style={{
-                      width: `${Math.max(10, Math.min(100, (item.count / (funnelData[0].count || 1)) * 100))}%`,
+                      // A sliver keeps a small stage visible; an empty one stays empty.
+                      width: !mounted
+                        ? '0%'
+                        : item.count === 0
+                        ? '0%'
+                        : `${Math.max(3, Math.min(100, (item.count / (funnelData[0].count || 1)) * 100))}%`,
                       backgroundColor: item.fill,
                     }}
                   />
@@ -531,7 +651,7 @@ export const DashboardView: React.FC = () => {
       </div>
 
       {/* Row 2: Price Per SQM Scatter Chart */}
-      <div className="bg-white p-5 rounded-md border border-slate-300">
+      <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -552,7 +672,7 @@ export const DashboardView: React.FC = () => {
             <select
               value={scatterLocation}
               onChange={(e) => setScatterLocation(e.target.value)}
-              className="text-xs p-1.5 rounded-md border border-slate-300 bg-white font-medium text-slate-700 outline-none"
+              className="text-xs p-1.5 rounded-xl border border-[var(--border)] bg-white font-medium text-slate-700 outline-none shadow-card"
             >
               <option value="ALL">All Locations</option>
               {uniqueLocations.map((loc) => (
@@ -565,47 +685,57 @@ export const DashboardView: React.FC = () => {
             <select
               value={scatterYear}
               onChange={(e) => setScatterYear(e.target.value)}
-              className="text-xs p-1.5 rounded-md border border-slate-300 bg-white font-medium text-slate-700 outline-none"
+              className="text-xs p-1.5 rounded-xl border border-[var(--border)] bg-white font-medium text-slate-700 outline-none shadow-card"
             >
               <option value="ALL">All Years</option>
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-              <option value="2024">2024</option>
+              {uniqueYears.map((y) => (
+                <option key={y} value={String(y)}>
+                  {y}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+          {scatterCount === 0 ? (
+            <ChartEmpty message="No decided tenders with an area recorded for this filter." />
+          ) : (
+          <DeferredChart order={1}>
+            <ResponsiveContainer width="100%" height="100%" debounce={RESIZE_DEBOUNCE}>
+            {/* Keyed on the filters so the dots sweep in again for a new selection */}
+            <ScatterChart
+              key={`${scatterLocation}|${scatterYear}`}
+              margin={{ top: 20, right: 16, bottom: 8, left: 0 }}
+            >
+              <CartesianGrid {...gridProps} />
               <XAxis
                 type="number"
                 dataKey="x"
                 name="Area (m²)"
-                unit=" m²"
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                axisLine={{ stroke: '#e2e8f0' }}
-                tickLine={false}
-                domain={['auto', 'auto']}
+                {...axisProps}
+                tickFormatter={(v: number) => `${compactNumber(v)} m²`}
+                domain={[0, 'auto']}
               />
               <YAxis
                 type="number"
                 dataKey="y"
                 name="AED / m²"
-                unit=" AED"
-                tick={{ fontSize: 11, fill: '#64748b' }}
-                axisLine={{ stroke: '#e2e8f0' }}
-                tickLine={false}
-                domain={[2000, 5000]}
+                {...axisProps}
+                width={52}
+                tickFormatter={(v: number) => compactNumber(v)}
+                domain={['auto', 'auto']}
+                label={{ value: 'AED / m²', angle: -90, position: 'insideLeft', offset: 10, fontSize: 10, fill: CHART_COLORS.axis }}
               />
-              <Tooltip
-                cursor={{ strokeDasharray: '3 3' }}
+              {/* Smaller, see-through dots so dense clusters still read as clusters */}
+              <ZAxis range={[28, 28]} />
+              <Tooltip {...TOOLTIP_ORDER}
+                cursor={lineCursor}
                 content={({ payload }) => {
                   if (!payload || !payload.length) return null;
                   const data = payload[0].payload;
                   return (
-                    <div className="bg-white p-3 rounded-md shadow-lg border border-slate-300 text-xs">
+                    <div className="bg-white/95 backdrop-blur-sm px-3 py-2 rounded-md shadow-lg border border-slate-200 text-xs">
                       <div className="font-semibold text-slate-900">
                         Tender #{data.tenderNumber} - {data.client}
                       </div>
@@ -623,30 +753,50 @@ export const DashboardView: React.FC = () => {
                   );
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+              <Legend {...legendProps} />
               <ReferenceLine
                 y={3500}
+                className="threshold-line"
                 stroke="#b91c1c"
                 strokeDasharray="4 4"
                 label={{
-                  value: 'Competitive Threshold (AED 3,500/m²)',
+                  value: 'Threshold AED 3,500/m²',
+                  // Drawn apart from the line, so it needs the same fade.
+                  className: 'threshold-line',
                   position: 'insideTopRight',
                   fill: '#b91c1c',
                   fontSize: 11,
                   fontWeight: '500',
                 }}
               />
-              <Scatter name="Awarded Deals" data={scatterPoints.awarded} fill="#10b981" />
-              <Scatter name="Rejected Deals" data={scatterPoints.rejected} fill="#f43f5e" />
+              <Scatter
+                name="Rejected Deals"
+                data={scatterPoints.rejected}
+                fill={CHART_COLORS.rejected}
+                fillOpacity={0.5}
+                shape={rejectedDot}
+                isAnimationActive={false}
+              />
+              {/* Drawn last so the fewer awarded dots sit on top of the rejected cloud */}
+              <Scatter
+                name="Awarded Deals"
+                data={scatterPoints.awarded}
+                fill={CHART_COLORS.awarded}
+                fillOpacity={0.85}
+                shape={awardedDot}
+                isAnimationActive={false}
+              />
             </ScatterChart>
           </ResponsiveContainer>
+          </DeferredChart>
+          )}
         </div>
       </div>
 
       {/* Row 3: Source-wise Performance & Location Distribution */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="stagger grid grid-cols-1 lg:grid-cols-2 gap-5">
         {/* Source Performance */}
-        <div className="bg-white p-5 rounded-md border border-slate-300">
+        <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
           <h3 className="font-semibold text-sm text-slate-900 mb-1">
             Top Source Performance (Lead Attribution)
           </h3>
@@ -655,30 +805,35 @@ export const DashboardView: React.FC = () => {
           </p>
 
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart layout="vertical" data={sourceData} barSize={12}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#64748b' }} width={90} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
-                <Bar dataKey="awarded" name="Awarded" stackId="a" fill="#10b981" />
-                <Bar dataKey="pending" name="In Pipeline" stackId="a" fill="#3b82f6" />
-                <Bar dataKey="rejected" name="Rejected" stackId="a" fill="#f43f5e" />
-              </BarChart>
-            </ResponsiveContainer>
+            {sourceData.length === 0 ? (
+              <ChartEmpty message="No tenders in scope." />
+            ) : (
+              <DeferredChart order={2}>
+                <ResponsiveContainer width="100%" height="100%" debounce={RESIZE_DEBOUNCE}>
+                <BarChart layout="vertical" data={sourceData} barSize={14} margin={{ left: 4, right: 12 }}>
+                  <CartesianGrid {...gridProps} horizontal={false} />
+                  <XAxis type="number" {...axisProps} allowDecimals={false} />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    {...axisProps}
+                    width={96}
+                    tick={<TruncatedTick maxChars={14} />}
+                  />
+                  <Tooltip {...TOOLTIP_ORDER} cursor={barCursor} content={<ChartTooltip showTotal />} />
+                  <Legend {...legendProps} />
+                  <Bar dataKey="awarded" name="Awarded" stackId="a" fill={CHART_COLORS.awarded} radius={[3, 0, 0, 3]} {...SMOOTH} />
+                  <Bar dataKey="pending" name="In Pipeline" stackId="a" fill={CHART_COLORS.pipeline} {...SMOOTH} />
+                  <Bar dataKey="rejected" name="Rejected" stackId="a" fill={CHART_COLORS.rejected} radius={[0, 3, 3, 0]} {...SMOOTH} />
+                </BarChart>
+              </ResponsiveContainer>
+              </DeferredChart>
+            )}
           </div>
         </div>
 
         {/* Location Distribution */}
-        <div className="bg-white p-5 rounded-md border border-slate-300">
+        <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
           <h3 className="font-semibold text-sm text-slate-900 mb-1">
             Top Locations Distribution
           </h3>
@@ -687,29 +842,44 @@ export const DashboardView: React.FC = () => {
           </p>
 
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={locationData} barSize={16}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="location" tick={{ fontSize: 10, fill: '#64748b' }} interval={0} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={{ stroke: '#e2e8f0' }} tickLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#ffffff',
-                    borderColor: '#e2e8f0',
-                    borderRadius: '8px',
-                    fontSize: '12px',
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '6px' }} />
-                <Bar dataKey="count" name="Tender Volume" fill="#0f172a" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {locationData.length === 0 ? (
+              <ChartEmpty message="No tenders in scope." />
+            ) : (
+              /* Bars run sideways so names like Madinat Al Riyad fit, on phones too */
+              <DeferredChart order={3}>
+                <ResponsiveContainer width="100%" height="100%" debounce={RESIZE_DEBOUNCE}>
+                <BarChart layout="vertical" data={locationData} barSize={14} margin={{ left: 4, right: 12 }}>
+                  <CartesianGrid {...gridProps} horizontal={false} />
+                  <XAxis type="number" {...axisProps} allowDecimals={false} />
+                  <YAxis
+                    dataKey="location"
+                    type="category"
+                    {...axisProps}
+                    width={110}
+                    tick={<TruncatedTick maxChars={17} />}
+                  />
+                  <Tooltip {...TOOLTIP_ORDER}
+                    cursor={barCursor}
+                    content={
+                      <ChartTooltip
+                        footer={(d) =>
+                          d.awardedValueM > 0 ? `AED ${d.awardedValueM.toLocaleString()}M awarded` : 'Nothing awarded yet'
+                        }
+                      />
+                    }
+                  />
+                  <Legend {...legendProps} />
+                  <Bar dataKey="count" name="Tenders" fill={CHART_COLORS.ink} radius={[0, 3, 3, 0]} {...SMOOTH} />
+                </BarChart>
+              </ResponsiveContainer>
+              </DeferredChart>
+            )}
           </div>
         </div>
       </div>
 
       {/* Side Panels: Follow-ups Due This Week */}
-      <div className="bg-white p-5 rounded-md border border-slate-300">
+      <div className="bg-white p-5 rounded-xl border border-[var(--border)] shadow-card">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold text-sm text-slate-900">
@@ -729,7 +899,7 @@ export const DashboardView: React.FC = () => {
           </button>
         </div>
 
-        <div className="divide-y divide-slate-200">
+        <div className="divide-y divide-[var(--border-subtle)]">
           {followUpsDueThisWeek.length === 0 ? (
             <div className="p-6 text-center text-xs text-slate-400">
               No follow-ups due this week. All pipelines current!
@@ -738,10 +908,11 @@ export const DashboardView: React.FC = () => {
             followUpsDueThisWeek.map((t) => {
               const isOverdue = t.nextFollowUpAt && new Date(t.nextFollowUpAt) < now;
               return (
-                <div
+                <button
+                  type="button"
                   key={t.id}
                   onClick={() => router.push(`/tenders/${t.id}`)}
-                  className="py-3 flex items-center justify-between gap-4 hover:bg-slate-50 px-2 rounded-md cursor-pointer transition-colors"
+                  className="w-full text-left py-3 flex items-center justify-between gap-4 hover:bg-slate-50 px-2 rounded-md cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <div
@@ -781,7 +952,7 @@ export const DashboardView: React.FC = () => {
                     </span>
                     <StatusBadge status={t.status} size="sm" />
                   </div>
-                </div>
+                </button>
               );
             })
           )}

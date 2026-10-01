@@ -61,7 +61,10 @@ export function AppShell({children}: {children: React.ReactNode}) {
 
         {/* Dynamic Content Canvas */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0 overflow-x-hidden">
-          {children}
+          {/* Keyed on the route so each screen plays its entrance; see .page-enter */}
+          <div key={pathname} className="page-enter">
+            {children}
+          </div>
         </main>
       </div>
 

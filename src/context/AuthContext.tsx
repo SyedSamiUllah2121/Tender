@@ -112,6 +112,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     again, and a person deactivated mid-session keeps working.
   */
   const refreshData = () => {
+    // Every save already invalidates; this covers anything that changed the
+    // store some other way.
+    tenderRepository.invalidateCache();
     setAllUsers(tenderRepository.getUsers());
     setSession((current) => {
       if (!current) return current;

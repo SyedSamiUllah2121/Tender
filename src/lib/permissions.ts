@@ -6,6 +6,7 @@ export type Action =
   | 'edit_tender'
   | 'change_status'
   | 'log_followup'
+  | 'comment'
   | 'reassign_owner'
   | 'record_award'
   | 'revert_terminal_status'
@@ -22,11 +23,32 @@ export function hasFullAccess(user: User | null | undefined): boolean {
 }
 
 /**
- * Adding persons and editing roles & permissions: Admin 1 owns this, and the
- * Manager has it too as part of full access to the department.
+ * Team administration: Admin 1 runs it day to day, and the Manager has it as
+ * part of full access to everything.
  */
 export function canManagePeople(user: User | null | undefined): boolean {
   return Boolean(user && user.isActive && (user.role === 'ADMIN_1' || user.role === 'MANAGER'));
+}
+
+/**
+ * Senior accounts. Only the Manager creates, changes or removes them, so
+ * Admin 1 cannot raise anyone (themselves included) to their own level or
+ * above, nor lock the Manager out.
+ */
+export const SENIOR_ROLES: Role[] = ['MANAGER', 'ADMIN_1'];
+
+/** Whether `actor` may edit this person, set their password, or (de)activate or remove them. */
+export function canManagePerson(actor: User | null | undefined, target: User): boolean {
+  if (!canManagePeople(actor)) return false;
+  if (actor!.role === 'MANAGER') return true;
+  return !SENIOR_ROLES.includes(target.role);
+}
+
+/** The roles `actor` may give someone, in display order. */
+export function assignableRoles(actor: User | null | undefined): Role[] {
+  if (!canManagePeople(actor)) return [];
+  const all: Role[] = ['MANAGER', 'ADMIN_1', 'ADMIN_2', 'SALESPERSON', 'DUBAI_VILLAS'];
+  return actor!.role === 'MANAGER' ? all : all.filter((r) => !SENIOR_ROLES.includes(r));
 }
 
 const VILLA_PATTERN = /villa/i;
@@ -49,8 +71,17 @@ function isOwnTender(user: User, tender: Tender): boolean {
   return tender.ownerId === user.id || tender.source?.userId === user.id;
 }
 
+/**
+ * Whether a tender is in the user's territory. Applies to the Manager and both
+ * Admins: "All UAE" covers everything, Abu Dhabi or Dubai covers that region.
+ * The header shows this scope, so the data has to honour it too.
+ */
+function inTerritory(user: User, tender: Tender): boolean {
+  return user.region === 'ALL' || tender.region === user.region;
+}
+
 function isInScope(user: User, tender: Tender): boolean {
-  if (hasFullAccess(user)) return true;
+  if (hasFullAccess(user)) return inTerritory(user, tender) || isOwnTender(user, tender);
   if (user.role === 'DUBAI_VILLAS') {
     return isDubaiVillaTender(tender) || isOwnTender(user, tender);
   }
@@ -75,14 +106,12 @@ export function can(user: User | null | undefined, action: Action, resource?: Te
     case 'create_tender':
       return true;
 
+    // On a given tender, everyone (admins included) is held to their scope:
+    // their own tenders, plus their territory for the Manager and Admins.
     case 'edit_tender':
     case 'log_followup':
-      if (full) return true;
-      if (!resource) return true;
-      return isInScope(user, resource);
-
     case 'change_status':
-      if (full) return true;
+    case 'comment':
       if (!resource) return true;
       return isInScope(user, resource);
 
@@ -91,16 +120,18 @@ export function can(user: User | null | undefined, action: Action, resource?: Te
     case 'record_award':
       return full;
 
-    // Reversing a closed (Awarded / Rejected) tender is an administration act.
+    // Reopening a closed (Awarded / Rejected) tender reverses a commercial
+    // decision, and deleting one removes the record: both are the Manager's.
     case 'revert_terminal_status':
     case 'soft_delete':
-      return role === 'ADMIN_1' || role === 'MANAGER';
+      return role === 'MANAGER';
 
     // Sources and consultants: department administration.
     case 'manage_admin':
       return full;
 
-    // Adding persons and editing roles & permissions.
+    // Team administration in general; which accounts and roles is decided by
+    // canManagePerson and assignableRoles.
     case 'manage_users':
       return role === 'ADMIN_1' || role === 'MANAGER';
 
@@ -129,6 +160,8 @@ export function canAccessTender(user: User | null | undefined, tender: Tender): 
  */
 export function scopeTenders(tenders: Tender[], user: User): Tender[] {
   const live = tenders.filter((t) => !t.deletedAt);
-  if (hasFullAccess(user)) return live;
+  // Lists and single tenders go through the same rule, so a list can never
+  // show a tender that would refuse to open. "All UAE" admins skip the work.
+  if (hasFullAccess(user) && user.region === 'ALL') return live;
   return live.filter((t) => isInScope(user, t));
 }

@@ -125,6 +125,10 @@ are not obvious from the code.
 - Add Person requires a password (8+ characters); Edit can reset one. Each
   person changes their own from the account menu. The roster flags anyone
   still on the shared starting password.
+- The Edit dialog opens with the person's current password in the field
+  (masked, with a reveal toggle). Only a different, non-empty value is saved
+  and length-checked, so re-saving someone still on `123` is not refused. An
+  empty field had looked as though the password had been wiped.
 - `migrateUsers` used to copy name, role and territory from the seed roster
   on every load, so edits to seeded people reverted on refresh. It now only
   upgrades records still on a pre-department role.
@@ -134,6 +138,76 @@ are not obvious from the code.
 - Tabs reload the store when another tab saves (`storage` event), so a person
   added in one tab can sign in from another.
 - Reset Seed Data is limited to the Manager and Admin 1, and asks first.
+
+### 2026-10-01: Charts and long lists
+- Every chart takes its tooltip, axes, legend and motion from
+  `components/charts/chartKit.tsx`. Legend and tooltip rows keep the order
+  the series are drawn in; Recharts sorts them alphabetically by default.
+- The dashboard volume chart is 12 months of smooth areas (Received, Awarded,
+  Rejected), not 6 months of bars. Location bars run sideways so long names
+  fit. Scatter dots animate in CSS (`popDot` in chartKit, `.scatter-dot`),
+  not through Recharts, whose per-point animation stutters at ~370 points.
+  The chart is keyed on its filters so the sweep replays.
+- The reports pie is a donut with a legend beside it; the size chart shows
+  the win rate its title promises. Year filters come from the data.
+- The dashboard's YoY figure compares year to date with the same period last
+  year. It used to fall back to a made-up +12%.
+- Follow-ups and Monitoring render 25 rows at a time (`components/ui/ShowMore.tsx`),
+  resetting when the tab or a filter changes. All dialogs close on Escape.
+
+### 2026-10-01: Visual refresh
+- The look is set in `globals.css`: `@theme` raises the radius scale
+  (`rounded-md` is 8px), adds `shadow-card`/`shadow-pop` and the
+  `animate-fade-in`/`animate-pop-in` motions, and the canvas and borders are
+  lighter. Field focus rings and the select chevron are unlayered CSS on
+  purpose, so they win over every screen's utilities.
+- Cards are `rounded-xl` with `shadow-card`; page titles are `text-xl`.
+- The sidebar keeps the brand red with a slight gradient, white active pill
+  and a profile card. Avatars use `personInitial` (`lib/initials.ts`), which
+  skips "Engr."/"Sir", since nearly everyone showed "E".
+
+### 2026-10-01: Motion
+- The shell keys `.page-enter` on the route; each page's top-level sections
+  rise in, staggered (`globals.css`). `.stagger` does the same for grids.
+  Both use `backwards` fill so no transform is left behind to trap a fixed
+  dialog, and `.fixed` children are excluded.
+- The sidebar highlight is one element moved by a CSS transform transition,
+  not `motion`: a JavaScript spring froze while the next page rendered. It
+  moves on click (`pendingPath`), before the route commits. Tab underlines
+  still use `motion` layoutIds (`components/ui/TabUnderline.tsx`).
+- `getTenders` reads a cached, index-joined list (`populatedTenders`) keyed
+  on `db.revision`, which every save, load and `refreshData` bumps. It was
+  ~17ms per call and ran several times per navigation. The tender objects
+  it returns are shared: treat them as read-only.
+- Dashboard and Reports charts mount a frame apart behind `DeferredChart`
+  (shimmer placeholder), so the page paints before the charts build.
+- Navigation measured on a production build: highlight moves in 3–26ms,
+  the dashboard shows in ~30ms with every chart drawn by ~220ms. Dev mode
+  is several times slower (React's dev `createElement` dominates).
+- `CountUp` animates headline figures. It times from the first frame and
+  discounts long stalls (capped at 1s), since the dashboard's first build
+  blocks the main thread long enough to skip the whole count.
+- Buttons give slightly on press, clickable cards lift, new rows fade in.
+  `prefers-reduced-motion` turns all of it off, `motion` included
+  (`MotionConfig` in `providers.tsx`).
+
+### 2026-10-01: Manager vs Admin 1, and access audit
+- The Manager has everything. Only the Manager reopens a closed tender (both
+  Awarded and Rejected, enforced in the repository, not just the dialog),
+  deletes a tender, and manages Manager and Admin 1 accounts. Admin 1 manages
+  everyone below Admin 1 (`canManagePerson`, `assignableRoles`). The guard is
+  now "one active Manager must remain", checked only when a change would
+  remove one.
+- Territory now scopes the Manager and Admins too: All UAE sees everything, a
+  region sees that region plus their own tenders. Before, the header said
+  "Scope DUBAI" while the lists showed everything, and `scopeTenders` let
+  admins skip the territory check that single tenders applied.
+- Fixed while auditing: comments had no access check, and @mentions notified
+  people who could not open the tender. `updateTender` wrote any field in the
+  patch (status, deletedAt) and logged history before checks that could
+  throw; it now takes editable fields only and checks first. Notifications
+  for tenders a person can no longer open are held back, and deadline alerts
+  go only to monitors whose territory covers the tender.
 
 ## Open items
 

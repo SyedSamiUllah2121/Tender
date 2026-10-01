@@ -21,6 +21,7 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { personInitial } from '../../lib/initials';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
 import { can, canManagePeople } from '../../lib/permissions';
 import { ChangePasswordDialog } from '../modals/ChangePasswordDialog';
@@ -273,19 +274,23 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2" aria-hidden="true">
+                    {/* A slow ripple says "new" without flashing */}
+                    <span className="absolute inset-0 rounded-full bg-amber-500 animate-soft-ping" />
+                    <span className="absolute inset-0 rounded-full bg-amber-500 ring-2 ring-white" />
+                  </span>
                 )}
               </button>
 
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white text-slate-900 rounded-md shadow-xl border border-slate-300 overflow-hidden z-50 animate-in fade-in-50 duration-100">
+                <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white text-slate-900 rounded-xl shadow-pop border border-[var(--border)] overflow-hidden z-50 animate-pop-in">
                   <div className="p-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-xs text-slate-900">
                         Notifications
                       </span>
                       {unreadCount > 0 && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#8b151b] text-white font-mono">
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#8b151b] text-white font-mono shadow-sm">
                           {unreadCount} new
                         </span>
                       )}
@@ -301,7 +306,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                     )}
                   </div>
 
-                  <div className="max-h-80 overflow-y-auto divide-y divide-slate-200">
+                  <div className="max-h-80 overflow-y-auto divide-y divide-[var(--border-subtle)]">
                     {notifications.length === 0 ? (
                       <div className="p-6 text-center text-xs text-slate-400">
                         No notifications yet.
@@ -375,7 +380,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                 className="flex items-center gap-2 px-2 sm:px-2.5 py-1.5 rounded-md bg-white hover:bg-[var(--bg-canvas)] border border-[var(--border)] transition-colors cursor-pointer text-left"
               >
                 <div className="w-6 h-6 rounded-md bg-[var(--brand-primary)] text-white font-bold text-[11px] flex items-center justify-center shrink-0">
-                  {currentUser.name.charAt(0)}
+                  {personInitial(currentUser.name)}
                 </div>
                 <div className="hidden xl:block">
                   <div className="text-xs font-semibold text-[var(--text-900)] leading-none">
@@ -389,7 +394,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
               </button>
 
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-72 bg-white text-slate-900 rounded-md shadow-xl border border-slate-300 overflow-hidden z-50 animate-in fade-in-50 duration-100">
+                <div className="absolute right-0 mt-2 w-72 bg-white text-slate-900 rounded-xl shadow-pop border border-[var(--border)] overflow-hidden z-50 animate-pop-in">
                   <div className="p-3 bg-slate-50 border-b border-slate-200">
                     <div className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
                       Active Account
@@ -466,7 +471,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
       {/* Floating feedback message for cron or notifications */}
       {cronMessage && (
-        <div className="bg-[#5e0d12] text-white text-center text-xs py-1.5 font-medium px-4">
+        <div className="bg-[#5e0d12] text-white text-center text-xs py-1.5 font-medium px-4 animate-fade-in">
           {cronMessage}
         </div>
       )}
