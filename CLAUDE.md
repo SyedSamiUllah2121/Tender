@@ -121,6 +121,20 @@ are not obvious from the code.
 - Notification links to a tender reopen that tender after sign-in again. Only
   tender pages are carried; every other screen still opens the dashboard.
 
+### 2026-10-01: Per-person passwords
+- Add Person requires a password (8+ characters); Edit can reset one. Each
+  person changes their own from the account menu. The roster flags anyone
+  still on the shared starting password.
+- `migrateUsers` used to copy name, role and territory from the seed roster
+  on every load, so edits to seeded people reverted on refresh. It now only
+  upgrades records still on a pre-department role.
+- The session is looked up again on every `refreshData`, so a change to your
+  own role or territory applies at once. Deactivating or removing yourself
+  signs you out. It no longer switches you into another admin's account.
+- Tabs reload the store when another tab saves (`storage` event), so a person
+  added in one tab can sign in from another.
+- Reset Seed Data is limited to the Manager and Admin 1, and asks first.
+
 ## Open items
 
 - **Shared database.** The biggest gap. Staff can't see each other's tenders

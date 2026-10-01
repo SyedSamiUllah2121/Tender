@@ -18,10 +18,12 @@ import {
   CalendarClock,
   ShieldAlert,
   PlusCircle,
+  KeyRound,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { tenderRepository } from '../../lib/repositories/tenderRepository';
-import { can } from '../../lib/permissions';
+import { can, canManagePeople } from '../../lib/permissions';
+import { ChangePasswordDialog } from '../modals/ChangePasswordDialog';
 import { ACTIVE_STATUSES, isPastFollowUpWindow } from '../../lib/followUpPolicy';
 import { Notification, ROLE_LABELS } from '../../types';
 
@@ -41,6 +43,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   const { currentUser, signOut, refreshData, dataVersion } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [cronRunning, setCronRunning] = useState(false);
   const [cronMessage, setCronMessage] = useState<string | null>(null);
@@ -410,6 +413,17 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
                       type="button"
                       onClick={() => {
                         setShowUserMenu(false);
+                        setShowChangePassword(true);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
+                    >
+                      <KeyRound className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Change password</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUserMenu(false);
                         signOut();
                       }}
                       className="w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer"
@@ -421,17 +435,27 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
 
                   <div className="p-2 bg-slate-50 flex items-center justify-between text-[11px] text-slate-500">
                     <span>Persistence: Local / Memory</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        tenderRepository.resetToSeed();
-                        refreshData();
-                        setShowUserMenu(false);
-                      }}
-                      className="text-[var(--brand-primary)] hover:underline font-medium cursor-pointer"
-                    >
-                      Reset Seed Data
-                    </button>
+                    {/* Resetting wipes every account and password, so only people admins may do it. */}
+                    {canManagePeople(currentUser) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          if (
+                            !window.confirm(
+                              'Reset all data in this browser to the shipped seed? Every tender edit, added person and changed password is lost, and everyone goes back to the starting password.'
+                            )
+                          ) {
+                            return;
+                          }
+                          tenderRepository.resetToSeed();
+                          refreshData();
+                        }}
+                        className="text-[var(--brand-primary)] hover:underline font-medium cursor-pointer"
+                      >
+                        Reset Seed Data
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -446,6 +470,12 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
           {cronMessage}
         </div>
       )}
+
+      <ChangePasswordDialog
+        isOpen={showChangePassword}
+        user={currentUser}
+        onClose={() => setShowChangePassword(false)}
+      />
     </header>
   );
 };

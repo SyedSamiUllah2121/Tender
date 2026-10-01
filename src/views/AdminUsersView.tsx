@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { ShieldCheck, PlusCircle, Lock, Pencil, Trash2, Power, PowerOff } from 'lucide-react';
+import { ShieldCheck, PlusCircle, Lock, Pencil, Trash2, Power, PowerOff, Eye, EyeOff, KeyRound } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { tenderRepository } from '../lib/repositories/tenderRepository';
+import { tenderRepository, MIN_PASSWORD_LENGTH } from '../lib/repositories/tenderRepository';
 import { User, Role, Region, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../types';
 import { can, canManagePeople } from '../lib/permissions';
 import { AccessDenied } from '../components/ui/AccessDenied';
@@ -27,6 +27,8 @@ interface PersonForm {
   phone: string;
   role: Role;
   region: Region | 'ALL';
+  /** Required for a new person; on an edit, left blank to keep the current one. */
+  password: string;
 }
 
 const EMPTY_FORM: PersonForm = {
@@ -35,15 +37,17 @@ const EMPTY_FORM: PersonForm = {
   phone: '',
   role: 'SALESPERSON',
   region: 'ABU_DHABI',
+  password: '',
 };
 
 export const AdminUsersView: React.FC = () => {
-  const { currentUser, dataVersion, refreshData, setCurrentUser } = useAuth();
+  const { currentUser, dataVersion, refreshData } = useAuth();
 
   const [editing, setEditing] = useState<User | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<PersonForm>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // The Manager and Admin 1 add persons and edit roles & permissions.
   const canEditPeople = canManagePeople(currentUser);
@@ -72,6 +76,7 @@ export const AdminUsersView: React.FC = () => {
     setEditing(null);
     setForm(EMPTY_FORM);
     setError(null);
+    setShowPassword(false);
     setShowModal(true);
   };
 
@@ -83,8 +88,10 @@ export const AdminUsersView: React.FC = () => {
       phone: user.phone || '',
       role: user.role,
       region: user.region,
+      password: '',
     });
     setError(null);
+    setShowPassword(false);
     setShowModal(true);
   };
 
@@ -92,6 +99,14 @@ export const AdminUsersView: React.FC = () => {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim()) return;
     setError(null);
+
+    // Checked before anything is saved, so a short password cannot leave the
+    // other edits applied and the password unchanged.
+    const password = form.password;
+    if ((!editing || password) && password.trim().length < MIN_PASSWORD_LENGTH) {
+      setError(`Choose a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
+      return;
+    }
 
     const payload = {
       name: form.name.trim(),
@@ -104,8 +119,9 @@ export const AdminUsersView: React.FC = () => {
     try {
       if (editing) {
         tenderRepository.updateUser(currentUser, editing.id, payload);
+        if (password) tenderRepository.setPassword(currentUser, editing.id, password);
       } else {
-        tenderRepository.createUser(currentUser, { ...payload, isActive: true });
+        tenderRepository.createUser(currentUser, { ...payload, password, isActive: true });
       }
       setShowModal(false);
       setEditing(null);
@@ -116,32 +132,22 @@ export const AdminUsersView: React.FC = () => {
     }
   };
 
-  /**
-   * Turning yourself off (or removing yourself) would leave the session pointing
-   * at an account that can no longer do anything, so hand over to another
-   * active person who can administer people.
-   */
-  const handOverIfSelf = (userId: string) => {
-    if (userId !== currentUser.id) return;
-    const others = tenderRepository.getUsers().filter((u) => u.id !== userId);
-    const next = others.find((u) => canManagePeople(u)) || others[0];
-    if (next) setCurrentUser(next);
-  };
-
+  /*
+    Deactivating or removing your own account signs you out: refreshData finds
+    the session no longer active. Nobody is switched into another person's
+    account, since that would skip their password.
+  */
   const handleToggleActive = (user: User) => {
     if (
       user.id === currentUser.id &&
       user.isActive &&
       !window.confirm(
-        'Deactivate your own account? You will be switched to another active administrator.'
+        'Deactivate your own account? You will be signed out and cannot sign in again until another administrator reactivates you.'
       )
     ) {
       return;
     }
-    apply(() => {
-      tenderRepository.updateUser(currentUser, user.id, { isActive: !user.isActive });
-      handOverIfSelf(user.id);
-    });
+    apply(() => tenderRepository.updateUser(currentUser, user.id, { isActive: !user.isActive }));
   };
 
   const handleChangeRole = (user: User, newRole: Role) =>
@@ -162,15 +168,12 @@ export const AdminUsersView: React.FC = () => {
       : '';
     const self =
       user.id === currentUser.id
-        ? '\n\nThis is your own account — you will be switched to another active administrator.'
+        ? '\n\nThis is your own account — you will be signed out.'
         : '';
     if (!window.confirm(`Remove ${user.name} from the Tendering Department?${warning}${self}`)) {
       return;
     }
-    apply(() => {
-      tenderRepository.deleteUser(currentUser, user.id);
-      handOverIfSelf(user.id);
-    });
+    apply(() => tenderRepository.deleteUser(currentUser, user.id));
   };
 
   if (!canViewRoster) {
@@ -319,6 +322,14 @@ export const AdminUsersView: React.FC = () => {
                       >
                         {u.isActive ? 'Active' : 'Disabled'}
                       </span>
+                      {canEditPeople && u.isActive && tenderRepository.usesDefaultPassword(u) && (
+                        <div
+                          className="mt-1 text-[10px] font-semibold text-amber-700 whitespace-nowrap"
+                          title="Still signs in with the starting password. Set one of their own with Edit."
+                        >
+                          Default password
+                        </div>
+                      )}
                     </td>
 
                     <td className="p-2 text-center">
@@ -464,6 +475,45 @@ export const AdminUsersView: React.FC = () => {
                   placeholder="+971 50 123 4567"
                   className="w-full p-2 rounded-md border border-slate-400"
                 />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="person-password"
+                  className="block text-[11px] font-semibold text-gray-700 mb-1"
+                >
+                  {editing ? 'New Password' : 'Password *'}
+                </label>
+                <div className="relative">
+                  <KeyRound className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    id="person-password"
+                    type={showPassword ? 'text' : 'password'}
+                    required={!editing}
+                    autoComplete="new-password"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    placeholder={
+                      editing
+                        ? 'Leave blank to keep the current password'
+                        : `At least ${MIN_PASSWORD_LENGTH} characters`
+                    }
+                    className="w-full p-2 pl-7 pr-9 rounded-md border border-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    className="absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-400 hover:text-gray-700 cursor-pointer"
+                  >
+                    {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+                <p className="mt-1 text-[10.5px] text-gray-500 leading-snug">
+                  {editing
+                    ? 'Set this to reset their password. They sign in with the email above and the new password.'
+                    : 'They sign in with the email above and this password, and can change it from their account menu.'}
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">

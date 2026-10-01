@@ -81,14 +81,20 @@ const LEGACY_ROLE_MAP: Record<string, User['role']> = {
   VIEWER: 'SALESPERSON',
 };
 
+const CURRENT_ROLES: string[] = ['MANAGER', 'ADMIN_1', 'ADMIN_2', 'SALESPERSON', 'DUBAI_VILLAS'];
+
 function migrateUsers(saved: User[]): User[] {
   const migrated = saved.map((u) => {
     // A password left over from an earlier build becomes the current default.
     if (u.password && SUPERSEDED_PASSWORDS.includes(u.password)) {
       u = { ...u, password: DEFAULT_PASSWORD };
     }
-    // The department roster is authoritative for the people it names; anyone
-    // else keeps their old role, mapped onto the new set.
+    // Only records still on a pre-department role are upgraded. Anything on a
+    // current role was set in Team & Permissions and must survive a reload.
+    if (CURRENT_ROLES.includes(u.role)) return u;
+
+    // The roster places the people it names; anyone else keeps their old role,
+    // mapped onto the new set.
     const seed = SEED_USERS.find(
       (s) => s.id === u.id || s.email.toLowerCase() === u.email.toLowerCase()
     );
@@ -122,6 +128,15 @@ function assertPeopleAdminRemains(userId: string, next: User | null): void {
   throw new Error(
     'At least one active Manager or Admin 1 must remain to administer people and roles.'
   );
+}
+
+/** Shortest password a person or an administrator may set. */
+export const MIN_PASSWORD_LENGTH = 8;
+
+function assertUsablePassword(password: string): void {
+  if (password.trim().length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Choose a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
+  }
 }
 
 class InMemoryDatabase {
@@ -238,6 +253,26 @@ class InMemoryDatabase {
     }
   }
 
+  /**
+   * Picks up what another tab saved. Each tab holds its own copy in memory, so
+   * without this a person added in one tab could not sign in from another, and
+   * the stale tab's next save would write the old roster back.
+   *
+   * Does nothing while the store is empty: that is another tab part-way
+   * through a reset, and re-seeding here would race it with different ids.
+   */
+  reloadFromStorage(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      if (!localStorage.getItem(STORAGE_KEY)) return false;
+    } catch {
+      return false;
+    }
+    this.initialized = false;
+    this.initialize();
+    return true;
+  }
+
   resetToSeed() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(STORAGE_KEY);
@@ -311,11 +346,33 @@ export const tenderRepository = {
     if ((user.password ?? DEFAULT_PASSWORD) !== currentPassword) {
       throw new Error('Your current password is not correct.');
     }
-    if (nextPassword.trim().length < 8) {
-      throw new Error('Choose a password of at least 8 characters.');
+    assertUsablePassword(nextPassword);
+    if (nextPassword === currentPassword) {
+      throw new Error('The new password must be different from the current one.');
     }
     user.password = nextPassword;
     db.persist();
+  },
+
+  /** Lets the Manager or Admin 1 set or reset anyone's password. */
+  setPassword(actor: User, userId: string, nextPassword: string): void {
+    if (!can(actor, 'manage_users')) {
+      throw new Error('Only the Manager or Admin 1 can set passwords.');
+    }
+    const user = db.users.find((u) => u.id === userId && !u.deletedAt);
+    if (!user) throw new Error('User not found');
+    assertUsablePassword(nextPassword);
+    user.password = nextPassword;
+    db.persist();
+  },
+
+  /** True while a person still signs in with the shared starting password. */
+  usesDefaultPassword(user: User): boolean {
+    return (user.password ?? DEFAULT_PASSWORD) === DEFAULT_PASSWORD;
+  },
+
+  reloadFromStorage(): boolean {
+    return db.reloadFromStorage();
   },
 
   getUserByEmail(email: string): User | undefined {
@@ -346,11 +403,13 @@ export const tenderRepository = {
     if (db.users.some((u) => !u.deletedAt && u.email.toLowerCase() === email)) {
       throw new Error('A user with this email already exists.');
     }
+    // Every new person gets a password of their own, never the shared default.
+    assertUsablePassword(data.password ?? '');
     const user: User = {
       ...data,
       email,
       name: data.name.trim(),
-      password: data.password || DEFAULT_PASSWORD,
+      password: data.password,
       id: `usr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       createdAt: new Date().toISOString(),
     };

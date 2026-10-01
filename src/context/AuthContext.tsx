@@ -27,7 +27,6 @@ interface SessionContextType {
   /** Null until somebody signs in. Only the login screen should see that. */
   session: User | null;
   allUsers: User[];
-  setCurrentUser: (user: User) => void;
   /** Returns an error message, or null when the sign-in succeeded. */
   signIn: (email: string, password: string) => string | null;
   signOut: () => void;
@@ -87,14 +86,18 @@ const sessionStore = {
   },
 };
 
+/** The stored record for a session, or null once it is removed or deactivated. */
+const resolveUser = (id: string): User | null => {
+  const user = tenderRepository.getUserById(id);
+  return user && !user.deletedAt && user.isActive ? user : null;
+};
+
 const readSession = (): User | null => {
   if (typeof window === 'undefined') return null;
   sessionStore.dropLegacy();
   const savedId = sessionStore.read();
-  if (!savedId) return null;
-  const user = tenderRepository.getUserById(savedId);
   // A person removed or deactivated since their last visit loses the session.
-  return user && !user.deletedAt && user.isActive ? user : null;
+  return savedId ? resolveUser(savedId) : null;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -102,22 +105,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [allUsers, setAllUsers] = useState<User[]>(() => tenderRepository.getUsers());
   const [dataVersion, setDataVersion] = useState(1);
 
+  /*
+    Edits replace the user record rather than mutating it, so the session is
+    looked up again on every refresh. Otherwise someone whose role or
+    territory was just changed keeps the old permissions until they sign in
+    again, and a person deactivated mid-session keeps working.
+  */
   const refreshData = () => {
     setAllUsers(tenderRepository.getUsers());
+    setSession((current) => {
+      if (!current) return current;
+      const fresh = resolveUser(current.id);
+      if (!fresh) sessionStore.clear();
+      return fresh;
+    });
     setDataVersion((v) => v + 1);
   };
 
-  const setCurrentUser = (user: User) => {
-    setSession(user);
-    if (typeof window !== 'undefined') sessionStore.write(user.id);
-    setDataVersion((v) => v + 1);
-  };
+  // Another tab saved: take its copy so the roster and passwords match.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.storageArea !== window.localStorage) return;
+      if (tenderRepository.reloadFromStorage()) refreshData();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const signIn = (email: string, password: string): string | null => {
     const { user, error } = tenderRepository.signIn(email, password);
     if (error || !user) return error || 'Unable to sign in.';
     setAllUsers(tenderRepository.getUsers());
-    setCurrentUser(user);
+    setSession(user);
+    sessionStore.write(user.id);
+    setDataVersion((v) => v + 1);
     return null;
   };
 
@@ -131,7 +152,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         session,
         allUsers,
-        setCurrentUser,
         signIn,
         signOut,
         refreshData,
